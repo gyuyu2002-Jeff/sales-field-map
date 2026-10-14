@@ -2,11 +2,13 @@
 """
 全台外勤巡訪地圖總中樞 - 靜態 HTML 生成器
 依使用者要求：
-1. 嚴格不使用跨縣市搜尋，搜尋僅鎖定當前園區/當前縣市，乾淨專注。
-2. 全台縣市順序嚴格依循：
-   - 西部 (北到南)：基隆市 -> 臺北市 -> 新北市 -> 桃園市 -> 新竹市 -> 新竹縣 -> 苗栗縣 -> 臺中市 -> 彰化縣 -> 南投縣 -> 雲林縣 -> 嘉義縣市 -> 臺南市 -> 高雄市 -> 屏東縣
-   - 東部 (北到南)：宜蘭縣 -> 花蓮縣 -> 臺東縣
-3. 採用雙層導航架構，每縣市擁有專屬工業區/科技園區導航與全景總覽。
+1. 完整 RWD 響應式網頁設計（支援手機、平板、桌機極致適配）
+   - 手機版底部專屬懸浮視圖切換器（📋 廠商名單 / ⚖️ 上下分割 / 🗺️ 地圖視野）
+   - 手機版底部抽屜式訪談紀錄表單 (Bottom-sheet Modal)
+   - 頂部導航列手機按鈕自動圖標化適配與防擠壓
+   - iOS / Android 觸控安全區支援 (env(safe-area-inset-bottom))
+2. 搜尋引擎專注於當前園區與縣市，無跨區干擾
+3. 全台 18 縣市 72 大園區順序嚴格依循：西部北到南 -> 東部北到南
 """
 
 import json
@@ -48,7 +50,7 @@ html_template = '''<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>全台外勤巡訪地圖總中樞 - 西部北到南至東部北到南 全台各縣市園區指南</title>
   
   <!-- Leaflet CSS -->
@@ -86,6 +88,7 @@ html_template = '''<!DOCTYPE html>
       background-color: var(--bg-primary);
       color: var(--text-main);
       height: 100vh;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -108,6 +111,7 @@ html_template = '''<!DOCTYPE html>
       display: flex;
       align-items: center;
       gap: 10px;
+      min-width: 0;
     }
 
     .brand-logo {
@@ -122,6 +126,7 @@ html_template = '''<!DOCTYPE html>
       font-size: 19px;
       font-weight: 900;
       box-shadow: 0 2px 6px rgba(22, 33, 58, 0.2);
+      flex-shrink: 0;
     }
 
     .brand-title {
@@ -130,18 +135,25 @@ html_template = '''<!DOCTYPE html>
       font-weight: 900;
       color: var(--navy);
       line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .brand-subtitle {
       font-size: 11.5px;
       color: var(--text-muted);
       letter-spacing: 0.03em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .header-actions {
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-shrink: 0;
     }
 
     .btn {
@@ -190,6 +202,7 @@ html_template = '''<!DOCTYPE html>
       z-index: 950;
       scrollbar-width: thin;
       flex-shrink: 0;
+      -webkit-overflow-scrolling: touch;
     }
 
     .county-nav-bar::-webkit-scrollbar {
@@ -273,6 +286,7 @@ html_template = '''<!DOCTYPE html>
       z-index: 900;
       scrollbar-width: thin;
       flex-shrink: 0;
+      -webkit-overflow-scrolling: touch;
     }
 
     .park-nav-bar::-webkit-scrollbar {
@@ -326,11 +340,12 @@ html_template = '''<!DOCTYPE html>
       color: #FFFFFF;
     }
 
-    /* Main Container (Split Screen) */
+    /* Main Container (Split Screen on Desktop) */
     .app-container {
       display: flex;
       flex: 1;
       height: calc(100vh - 142px);
+      height: calc(100dvh - 142px);
       position: relative;
       overflow: hidden;
     }
@@ -345,6 +360,7 @@ html_template = '''<!DOCTYPE html>
       z-index: 500;
       flex-shrink: 0;
       box-shadow: 2px 0 12px rgba(22, 33, 58, 0.04);
+      height: 100%;
     }
 
     .sidebar-controls {
@@ -439,6 +455,7 @@ html_template = '''<!DOCTYPE html>
       overflow-x: auto;
       padding-bottom: 2px;
       scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
     }
 
     .chips-scroll::-webkit-scrollbar {
@@ -480,6 +497,7 @@ html_template = '''<!DOCTYPE html>
       gap: 5px;
       overflow-x: auto;
       scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
     }
 
     .chip-status {
@@ -527,6 +545,7 @@ html_template = '''<!DOCTYPE html>
       flex-direction: column;
       gap: 9px;
       scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
     }
 
     .client-card {
@@ -875,36 +894,205 @@ html_template = '''<!DOCTYPE html>
       position: relative;
     }
 
-    @media (max-width: 860px) {
-      .app-container {
-        flex-direction: column;
-        height: calc(100vh - 138px);
+    /* ========================================================
+       📱 RWD 響應式網頁設計核心樣式 (Responsive Web Design)
+       ======================================================== */
+    .mobile-view-toggle {
+      display: none;
+    }
+
+    /* 平板適配 (iPad / Tablet: 769px ~ 1024px) */
+    @media (max-width: 1024px) {
+      .sidebar {
+        width: 380px;
+      }
+      .brand-title {
+        font-size: 16px;
+      }
+    }
+
+    /* 手機極致適配 (Mobile Phone: <= 768px) */
+    @media (max-width: 768px) {
+      header {
+        padding: 8px 12px;
+        gap: 8px;
       }
 
-      .sidebar {
+      .brand-logo {
+        width: 30px;
+        height: 30px;
+        font-size: 16px;
+        border-radius: 7px;
+      }
+
+      .brand-title {
+        font-size: 15px;
+      }
+
+      .brand-subtitle {
+        display: none; /* 隱藏過長副標題，避免破版 */
+      }
+
+      .header-actions {
+        gap: 4px;
+      }
+
+      .btn {
+        padding: 5px 8px;
+        font-size: 11px;
+      }
+
+      .county-nav-bar {
+        padding: 5px 10px;
+        gap: 6px;
+      }
+
+      .county-pill {
+        padding: 5px 10px;
+        font-size: 11.5px;
+        border-radius: 6px;
+      }
+
+      .region-tag {
+        font-size: 10px;
+        padding: 4px 6px;
+      }
+
+      .park-nav-bar {
+        padding: 5px 10px;
+        gap: 5px;
+      }
+
+      .park-pill {
+        padding: 4px 10px;
+        font-size: 11px;
+      }
+
+      /* Container 適配手機動態可視高度 */
+      .app-container {
+        height: calc(100vh - 122px);
+        height: calc(100dvh - 122px);
+        position: relative;
+      }
+
+      /* 手機專屬底部浮動模式切換列 (Floating View Toggle) */
+      .mobile-view-toggle {
+        display: flex;
+        position: fixed;
+        bottom: 14px;
+        bottom: calc(14px + env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1500;
+        background: rgba(22, 33, 58, 0.94);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        padding: 4px;
+        border-radius: 999px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        gap: 3px;
+      }
+
+      .view-btn {
+        background: transparent;
+        border: none;
+        color: #D1D5DB;
+        padding: 7px 15px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+      }
+
+      .view-btn.active {
+        background: #FFFFFF;
+        color: #16213A;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+      }
+
+      /* 手機視圖模式 1: 分割模式 (預設上下分割) */
+      .app-container.mobile-split {
+        flex-direction: column;
+      }
+      .app-container.mobile-split #map {
+        display: block;
+        height: 44%;
+        order: 1;
+      }
+      .app-container.mobile-split .sidebar {
+        display: flex;
         width: 100%;
-        height: 54%;
+        height: 56%;
         order: 2;
         border-right: none;
         border-top: 2px solid var(--border);
       }
 
-      #map {
-        height: 46%;
-        order: 1;
+      /* 手機視圖模式 2: 名單全螢幕模式 */
+      .app-container.mobile-list #map {
+        display: none !important;
+      }
+      .app-container.mobile-list .sidebar {
+        display: flex !important;
+        width: 100% !important;
+        height: 100% !important;
+        border-right: none;
       }
 
-      header {
-        padding: 8px 12px;
+      /* 手機視圖模式 3: 地圖全螢幕模式 */
+      .app-container.mobile-map .sidebar {
+        display: none !important;
+      }
+      .app-container.mobile-map #map {
+        display: block !important;
+        width: 100% !important;
+        height: 100% !important;
       }
 
+      /* 預留底部安全高度，避免卡片被底部切換按鈕遮擋 */
+      .client-list {
+        padding-bottom: 75px;
+      }
+
+      /* 手機彈窗抽屜化 (Bottom-Sheet Modal) */
+      .modal-overlay {
+        padding: 0;
+        align-items: flex-end;
+      }
+
+      .modal-card {
+        max-width: 100%;
+        border-radius: 16px 16px 0 0;
+        padding: 18px 16px calc(24px + env(safe-area-inset-bottom)) 16px;
+        max-height: 85vh;
+        max-height: 85dvh;
+      }
+
+      .map-controls-panel {
+        top: 10px;
+        right: 10px;
+      }
+
+      .map-tool-btn {
+        padding: 7px 10px;
+        font-size: 11px;
+      }
+    }
+
+    /* 超小螢幕手機適配 (<= 420px) */
+    @media (max-width: 420px) {
       .brand-title {
-        font-size: 16px;
+        font-size: 14px;
       }
-
-      .btn {
-        padding: 5px 8px;
-        font-size: 11.5px;
+      .header-actions .btn-text {
+        display: none; /* 超小螢幕隱藏文字僅保留圖標 */
+      }
+      .header-actions .btn {
+        padding: 6px 8px;
+        font-size: 13px;
       }
     }
   </style>
@@ -923,13 +1111,13 @@ html_template = '''<!DOCTYPE html>
 
     <div class="header-actions">
       <button class="btn" id="btnExport" title="匯出當前拜訪狀態為 CSV 檔（含詳細拜訪紀錄與摘要）">
-        📤 匯出記錄
+        <span>📤</span><span class="btn-text"> 匯出記錄</span>
       </button>
       <button class="btn" id="btnImport" title="匯入客製化客戶名單 CSV">
-        📥 匯入名單
+        <span>📥</span><span class="btn-text"> 匯入名單</span>
       </button>
-      <button class="btn btn-primary" id="btnAddClient">
-        ➕ 新增客戶
+      <button class="btn btn-primary" id="btnAddClient" title="新增自訂客戶">
+        <span>➕</span><span class="btn-text"> 新增客戶</span>
       </button>
       <input type="file" id="fileInput" accept=".csv" style="display: none;" />
     </div>
@@ -945,14 +1133,14 @@ html_template = '''<!DOCTYPE html>
     <!-- Populated dynamically based on selected county -->
   </nav>
 
-  <!-- Main Split Container -->
-  <div class="app-container">
+  <!-- Main Split Container (Desktop Side-by-Side, Mobile Responsive Split/List/Map) -->
+  <div class="app-container mobile-split" id="appContainer">
     
     <!-- Sidebar: Search & Client Cards -->
     <aside class="sidebar">
       
       <div class="sidebar-controls">
-        <!-- Search bar with Clear & Search buttons (Focused on Active Park, No Cross-County Distractions) -->
+        <!-- Search bar with Clear & Search buttons -->
         <div class="search-row">
           <div class="search-input-wrapper">
             <span class="search-icon-left">🔍</span>
@@ -1025,9 +1213,22 @@ html_template = '''<!DOCTYPE html>
 
   </div>
 
+  <!-- 📱 手機專屬浮動視圖切換列 (RWD Floating View Switcher) -->
+  <div class="mobile-view-toggle" id="mobileViewToggle">
+    <button class="view-btn" id="btnViewList" onclick="setMobileView('list')">
+      📋 廠商名單 (<span id="mobileCount">0</span>)
+    </button>
+    <button class="view-btn active" id="btnViewSplit" onclick="setMobileView('split')">
+      ⚖️ 分割
+    </button>
+    <button class="view-btn" id="btnViewMap" onclick="setMobileView('map')">
+      🗺️ 地圖視野
+    </button>
+  </div>
+
   <!-- Modal 1: 拜訪內容紀錄 (外勤業務核心 CRM 功能) -->
   <div class="modal-overlay" id="modalVisitLog">
-    <div class="modal-card" style="max-width: 580px;">
+    <div class="modal-card">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; border-bottom:1.5px solid var(--border); padding-bottom:10px;">
         <div>
           <div style="font-size:11px; font-weight:800; color:var(--blue); text-transform:uppercase; letter-spacing:0.05em;">外勤巡訪紀錄</div>
@@ -1192,6 +1393,24 @@ html_template = '''<!DOCTYPE html>
     let displayedCount = 60;
     let searchDebounceTimer = null;
     let markerDebounceTimer = null;
+    let currentMobileView = "split"; // "list", "split", "map"
+
+    // --- RWD Mobile View Switcher ---
+    window.setMobileView = function(mode) {
+      currentMobileView = mode;
+      const appContainer = document.getElementById('appContainer');
+      appContainer.classList.remove('mobile-list', 'mobile-map', 'mobile-split');
+      appContainer.classList.add(`mobile-${mode}`);
+
+      document.querySelectorAll('#mobileViewToggle .view-btn').forEach(btn => btn.classList.remove('active'));
+      if (mode === 'list') document.getElementById('btnViewList').classList.add('active');
+      else if (mode === 'split') document.getElementById('btnViewSplit').classList.add('active');
+      else if (mode === 'map') document.getElementById('btnViewMap').classList.add('active');
+
+      if (map) {
+        setTimeout(() => { map.invalidateSize(); }, 200);
+      }
+    };
 
     // Helper: Get localStorage key for a specific park
     function getParkStorageKey(pid) {
@@ -1610,8 +1829,10 @@ html_template = '''<!DOCTYPE html>
     function renderList() {
       executeFilter();
 
-      // Update Header Count Text
+      // Update Header Count Text & Mobile Toggle Counter
       document.getElementById('resultCountText').innerText = `顯示 ${currentFiltered.length} / ${clients.length} 家廠商`;
+      const mobileCounter = document.getElementById('mobileCount');
+      if (mobileCounter) mobileCounter.innerText = currentFiltered.length;
       updateBadgeCounts();
 
       // Update Map Pins with Debounce
@@ -1648,7 +1869,7 @@ html_template = '''<!DOCTYPE html>
         container.appendChild(visitedBanner);
       }
 
-      // Zero Results Handling (無跨縣市推薦，乾淨聚焦在當前園區)
+      // Zero Results Handling (無跨縣市干擾，乾淨聚焦在當前園區)
       if (currentFiltered.length === 0) {
         const q = (searchQuery || "").trim();
         let noticeHtml = '';
@@ -1792,6 +2013,11 @@ html_template = '''<!DOCTYPE html>
     // --- Card & Map Interaction ---
     function focusOnClient(c) {
       highlightClientCard(c.id);
+
+      // 手機版若在名單全螢幕模式，自動切換至分割模式以便看到地圖
+      if (window.innerWidth <= 768 && currentMobileView === 'list') {
+        setMobileView('split');
+      }
 
       if (markers[c.id]) {
         map.flyTo([c.lat, c.lng], 17, { duration: 1 });
@@ -2024,6 +2250,18 @@ html_template = '''<!DOCTYPE html>
       renderParkNavBar();
       switchCounty("keelung");
 
+      // 手機端視圖初始化：若寬度小於 768px 預設為上下分割
+      if (window.innerWidth <= 768) {
+        setMobileView("split");
+      }
+
+      // 監聽螢幕旋轉與縮放 (Orientation & Resize)
+      window.addEventListener('resize', () => {
+        if (map) {
+          map.invalidateSize();
+        }
+      });
+
       // Infinite scroll listener for client list
       const clientListContainer = document.getElementById('clientList');
       clientListContainer.addEventListener('scroll', () => {
@@ -2190,6 +2428,12 @@ html_template = '''<!DOCTYPE html>
 
             userLocationMarker = L.marker([lat, lng], { icon: meIcon }).addTo(map);
             userLocationMarker.bindPopup("<b>📍 您的目前位置</b>").openPopup();
+            
+            // 手機版若在地圖全關模式，自動切換至地圖或分割模式
+            if (window.innerWidth <= 768 && currentMobileView === 'list') {
+              setMobileView('map');
+            }
+
             map.flyTo([lat, lng], 16);
           },
           (err) => {
