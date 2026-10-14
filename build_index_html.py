@@ -1,19 +1,54 @@
 # -*- coding: utf-8 -*-
+"""
+全台外勤巡訪地圖總中樞 - 靜態 HTML 生成器
+支援雙層導航架構：
+- 第一層：縣市切換條 (桃園市、苗栗縣、臺南市、全台總覽)
+- 第二層：各縣市所屬工業區/科學園區切換條 (含全縣/市總覽)
+- 資料源：taiwan_parks_database.json (4,244 家廠商，17 大園區)
+"""
+
 import json
+import os
+import sys
 
-# 1. Load all parks data
-with open('all_taoyuan_parks.json', 'r', encoding='utf-8') as f:
-    all_parks = json.load(f)
+# UTF-8 safety
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-# Serialize to compact JSON for inlining
-all_parks_json = json.dumps(all_parks, ensure_ascii=False)
+DATABASE_FILE = 'taiwan_parks_database.json'
+FALLBACK_FILE = 'all_taoyuan_parks.json'
+
+if os.path.exists(DATABASE_FILE):
+    with open(DATABASE_FILE, 'r', encoding='utf-8') as f:
+        database_bundle = json.load(f)
+    print(f"[OK] 成功載入 {DATABASE_FILE}")
+elif os.path.exists(FALLBACK_FILE):
+    with open(FALLBACK_FILE, 'r', encoding='utf-8') as f:
+        taoyuan_parks = json.load(f)
+    database_bundle = {
+        "counties": {
+            "taoyuan": {
+                "name": "桃園市",
+                "icon": "🏢",
+                "default_park": "zhongli",
+                "parks": list(taoyuan_parks.keys())
+            }
+        },
+        "parks": taoyuan_parks
+    }
+    print(f"[WARN] 找不到 {DATABASE_FILE}，已回退載入 {FALLBACK_FILE}")
+else:
+    raise FileNotFoundError("找不到任何工業區資料庫檔案！")
+
+# Compact JSON serialization
+database_json = json.dumps(database_bundle, ensure_ascii=False)
 
 html_template = '''<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>桃園外勤巡訪地圖總中樞 - 7大工業區 1,874家廠商巡訪指南</title>
+  <title>全台外勤巡訪地圖總中樞 - 17大園區 4,244家廠商巡訪指南</title>
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -141,11 +176,76 @@ html_template = '''<!DOCTYPE html>
       color: #FFFFFF;
     }
 
-    /* Park Navigation Bar (橫向捲動切換各大工業區) */
-    .park-nav-bar {
-      background: #F4F2EC;
+    /* Tier 1: County Navigation Bar (縣市一級切換條) */
+    .county-nav-bar {
+      background: #FFFFFF;
       border-bottom: 1.5px solid var(--border);
-      padding: 6px 16px;
+      padding: 7px 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      white-space: nowrap;
+      z-index: 950;
+      scrollbar-width: thin;
+      flex-shrink: 0;
+    }
+
+    .county-nav-bar::-webkit-scrollbar {
+      height: 3px;
+    }
+    .county-nav-bar::-webkit-scrollbar-thumb {
+      background: #D1CDBC;
+      border-radius: 2px;
+    }
+
+    .county-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      background: #F4F2EC;
+      border: 1.5px solid transparent;
+      color: var(--navy);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .county-pill:hover {
+      background: #EAE6DC;
+      color: var(--blue);
+    }
+
+    .county-pill.active {
+      background: var(--navy);
+      color: #FFFFFF;
+      border-color: var(--navy);
+      box-shadow: 0 2px 8px rgba(22, 33, 58, 0.25);
+    }
+
+    .county-pill-count {
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: #E0DDD2;
+      color: var(--navy);
+      font-weight: 800;
+    }
+
+    .county-pill.active .county-pill-count {
+      background: rgba(255, 255, 255, 0.25);
+      color: #FFFFFF;
+    }
+
+    /* Tier 2: Park Navigation Bar (園區二級切換條) */
+    .park-nav-bar {
+      background: #F8F7F3;
+      border-bottom: 1.5px solid var(--border);
+      padding: 6px 18px;
       overflow-x: auto;
       white-space: nowrap;
       display: flex;
@@ -167,9 +267,9 @@ html_template = '''<!DOCTYPE html>
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 6px 12px;
+      padding: 5px 12px;
       border-radius: 999px;
-      font-size: 12.5px;
+      font-size: 12px;
       font-weight: 700;
       background: #FFFFFF;
       border: 1.5px solid var(--border);
@@ -186,14 +286,14 @@ html_template = '''<!DOCTYPE html>
     }
 
     .park-pill.active {
-      background: var(--navy);
-      border-color: var(--navy);
+      background: var(--blue);
+      border-color: var(--blue);
       color: #FFFFFF;
-      box-shadow: 0 2px 8px rgba(22, 33, 58, 0.25);
+      box-shadow: 0 2px 8px rgba(26, 77, 161, 0.3);
     }
 
     .park-pill-count {
-      font-size: 11px;
+      font-size: 10.5px;
       padding: 1px 6px;
       border-radius: 999px;
       background: #E8E5DC;
@@ -202,7 +302,7 @@ html_template = '''<!DOCTYPE html>
     }
 
     .park-pill.active .park-pill-count {
-      background: rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.28);
       color: #FFFFFF;
     }
 
@@ -210,14 +310,14 @@ html_template = '''<!DOCTYPE html>
     .app-container {
       display: flex;
       flex: 1;
-      height: calc(100vh - 105px);
+      height: calc(100vh - 142px);
       position: relative;
       overflow: hidden;
     }
 
     /* Sidebar (Client Cards & Filtering) */
     .sidebar {
-      width: 450px;
+      width: 460px;
       background: var(--bg-primary);
       border-right: 1.5px solid var(--border);
       display: flex;
@@ -236,7 +336,7 @@ html_template = '''<!DOCTYPE html>
       gap: 9px;
     }
 
-    /* Search Box with Clear Button & Explicit Search Button */
+    /* Search Box */
     .search-row {
       display: flex;
       gap: 6px;
@@ -299,14 +399,15 @@ html_template = '''<!DOCTYPE html>
     .chips-group {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 5px;
     }
 
     .chips-label {
       font-size: 11px;
-      font-weight: 700;
-      color: var(--text-muted);
-      letter-spacing: 0.04em;
+      font-weight: 800;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -324,100 +425,120 @@ html_template = '''<!DOCTYPE html>
       height: 3px;
     }
     .chips-scroll::-webkit-scrollbar-thumb {
-      background: #DDD;
+      background: #D1CDBC;
       border-radius: 2px;
     }
 
     .chip {
-      padding: 3.5px 9px;
+      padding: 4px 9px;
+      border-radius: 6px;
       font-size: 11.5px;
-      font-weight: 700;
-      background: #F1EFE7;
-      color: var(--navy);
-      border-radius: 999px;
+      font-weight: 600;
+      background: #F4F2EC;
+      color: #4B5563;
       border: 1px solid transparent;
       cursor: pointer;
       white-space: nowrap;
       transition: all 0.15s;
+      flex-shrink: 0;
     }
 
     .chip:hover {
-      background: #E6E3D8;
+      background: #EAE6DC;
+      color: var(--navy);
     }
 
     .chip.active {
       background: var(--navy);
       color: #FFFFFF;
-      border-color: var(--navy);
+      font-weight: 800;
     }
 
+    /* Status Filters */
     .status-chips-scroll {
       display: flex;
       gap: 5px;
       overflow-x: auto;
-      padding-bottom: 2px;
+      scrollbar-width: none;
     }
 
-    .chip-status.active-all { background: var(--navy); color: #fff; }
-    .chip-status.active-listed { background: var(--accent-orange); color: #fff; }
-    .chip-status.active-pending { background: var(--blue); color: #fff; }
-    .chip-status.active-negotiating { background: var(--accent-purple); color: #fff; }
-    .chip-status.active-done { background: var(--accent-green); color: #fff; }
+    .chip-status {
+      padding: 5px 10px;
+      font-size: 11.5px;
+      font-weight: 700;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #FFFFFF;
+      color: #4B5563;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
 
-    /* Result Count Header */
+    .chip-status:hover {
+      border-color: var(--navy);
+      color: var(--navy);
+    }
+
+    .chip-status.active-all { background: var(--navy); color: #FFF; border-color: var(--navy); }
+    .chip-status.active-listed { background: var(--accent-orange); color: #FFF; border-color: var(--accent-orange); }
+    .chip-status.active-pending { background: var(--blue); color: #FFF; border-color: var(--blue); }
+    .chip-status.active-negotiating { background: var(--accent-purple); color: #FFF; border-color: var(--accent-purple); }
+    .chip-status.active-done { background: var(--accent-green); color: #FFF; border-color: var(--accent-green); }
+
+    /* Client List Area */
     .client-list-header {
       padding: 8px 16px;
-      background: #F9F8F5;
+      background: #FAF8F5;
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 700;
       color: var(--text-muted);
-      flex-shrink: 0;
     }
 
-    /* Client Cards List (Scrollable) */
     .client-list {
       flex: 1;
       overflow-y: auto;
-      padding: 10px 14px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 9px;
+      scrollbar-width: thin;
     }
 
     .client-card {
       background: var(--card-bg);
       border: 1.5px solid var(--border);
-      border-radius: 10px;
-      padding: 12px 14px;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      position: relative;
+      border-radius: 8px;
+      padding: 11px 13px;
       display: flex;
       flex-direction: column;
       gap: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      position: relative;
     }
 
     .client-card:hover {
       border-color: var(--blue);
-      box-shadow: 0 4px 12px rgba(26, 77, 161, 0.08);
+      box-shadow: 0 4px 12px rgba(22, 33, 58, 0.08);
       transform: translateY(-1px);
     }
 
     .client-card.active {
-      border-color: var(--blue);
-      background: var(--blue-subtle);
-      box-shadow: 0 0 0 2px var(--blue);
+      border-color: var(--navy);
+      box-shadow: 0 0 0 2px var(--navy);
+      background: #FCFBF8;
     }
 
     .card-top {
       display: flex;
-      align-items: flex-start;
       justify-content: space-between;
-      gap: 8px;
+      align-items: flex-start;
+      gap: 6px;
     }
 
     .card-title {
@@ -425,78 +546,72 @@ html_template = '''<!DOCTYPE html>
       font-weight: 800;
       color: var(--navy);
       line-height: 1.3;
+      flex: 1;
     }
 
     .badge-listed {
+      font-size: 10.5px;
+      font-weight: 800;
+      padding: 1.5px 6px;
+      border-radius: 4px;
       background: #FEF3C7;
       color: #92400E;
-      font-size: 10.5px;
-      font-weight: 900;
-      padding: 2px 6px;
-      border-radius: 4px;
-      border: 1px solid #FCD34D;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-
-    .badge-industry {
-      font-size: 10.5px;
-      color: var(--navy-light);
-      background: #EDEAE1;
-      padding: 2px 7px;
-      border-radius: 4px;
-      display: inline-block;
+      border: 1px solid #FDE68A;
       white-space: nowrap;
     }
 
     .card-address {
       font-size: 12px;
-      color: var(--text-muted);
+      color: #4B5563;
       display: flex;
       align-items: center;
       gap: 5px;
+      line-height: 1.35;
     }
 
     .card-road {
-      font-weight: 700;
+      font-size: 11px;
+      font-weight: 800;
       color: var(--blue);
-      background: #EEF3FC;
-      padding: 1px 5px;
-      border-radius: 3px;
+      background: var(--blue-subtle);
+      padding: 1px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
     }
 
     .card-meta {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 8px;
       font-size: 11.5px;
-      color: #4B5563;
-      padding-top: 4px;
-      border-top: 1px dashed var(--border);
+      color: var(--text-muted);
+      flex-wrap: wrap;
     }
 
-    .card-meta a {
-      color: var(--blue);
-      text-decoration: none;
-      font-weight: 700;
+    .badge-industry {
+      background: #F3F4F6;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #374151;
     }
 
     .card-notes {
-      font-size: 11px;
-      background: #FAF9F5;
+      font-size: 11.5px;
+      background: #F8FAFC;
+      border: 1px dashed #CBD5E1;
       padding: 5px 8px;
-      border-radius: 5px;
-      color: #4B5563;
-      border: 1px solid #EFECE6;
-      line-height: 1.4;
+      border-radius: 6px;
+      color: #334155;
+      line-height: 1.35;
     }
 
-    /* Visit Record Summary Box inside Client Card */
+    /* Structured Visit Record Box inside Card */
     .card-visit-box {
       background: #F0FDF4;
       border: 1.5px solid #BBF7D0;
       border-radius: 7px;
-      padding: 8px 10px;
+      padding: 7px 10px;
       margin-top: 2px;
       display: flex;
       flex-direction: column;
@@ -695,7 +810,7 @@ html_template = '''<!DOCTYPE html>
     .modal-card {
       background: #FFFFFF;
       border-radius: 12px;
-      max-width: 540px;
+      max-width: 560px;
       width: 100%;
       padding: 22px;
       box-shadow: 0 20px 40px rgba(0,0,0,0.25);
@@ -743,7 +858,7 @@ html_template = '''<!DOCTYPE html>
     @media (max-width: 860px) {
       .app-container {
         flex-direction: column;
-        height: calc(100vh - 100px);
+        height: calc(100vh - 138px);
       }
 
       .sidebar {
@@ -781,8 +896,8 @@ html_template = '''<!DOCTYPE html>
     <div class="brand">
       <div class="brand-logo">🗺️</div>
       <div>
-        <div class="brand-title" id="headerTitle">桃園外勤巡訪地圖總中樞</div>
-        <div class="brand-subtitle" id="headerSubtitle">全桃 7 大工業區 · 1,874 家全區廠商巡訪指南</div>
+        <div class="brand-title" id="headerTitle">全台外勤巡訪地圖總中樞</div>
+        <div class="brand-subtitle" id="headerSubtitle">17 大工業與科技園區 · 4,244 家廠商巡訪指南</div>
       </div>
     </div>
 
@@ -800,40 +915,14 @@ html_template = '''<!DOCTYPE html>
     </div>
   </header>
 
-  <!-- Top Park Navigation Bar (各大工業區一鍵切換) -->
+  <!-- Tier 1: 縣市導航列 (County Navigation Bar) -->
+  <nav class="county-nav-bar" id="countyNavBar">
+    <!-- Populated by JavaScript -->
+  </nav>
+
+  <!-- Tier 2: 園區導航列 (Park Navigation Bar) -->
   <nav class="park-nav-bar" id="parkNavBar">
-    <button class="park-pill active" data-park="zhongli">
-      <span>📍 中壢產業園區</span>
-      <span class="park-pill-count">744 家</span>
-    </button>
-    <button class="park-pill" data-park="guishan">
-      <span>📍 龜山產業園區</span>
-      <span class="park-pill-count">220 家</span>
-    </button>
-    <button class="park-pill" data-park="huaya">
-      <span>📍 華亞科技園區</span>
-      <span class="park-pill-count">100 家</span>
-    </button>
-    <button class="park-pill" data-park="pingzhen">
-      <span>📍 平鎮產業園區</span>
-      <span class="park-pill-count">120 家</span>
-    </button>
-    <button class="park-pill" data-park="guanyin">
-      <span>📍 觀音產業園區</span>
-      <span class="park-pill-count">350 家</span>
-    </button>
-    <button class="park-pill" data-park="dayuan">
-      <span>📍 大園產業園區</span>
-      <span class="park-pill-count">230 家</span>
-    </button>
-    <button class="park-pill" data-park="youshi">
-      <span>📍 幼獅產業園區</span>
-      <span class="park-pill-count">110 家</span>
-    </button>
-    <button class="park-pill" data-park="all">
-      <span>🌐 全桃 7 大園區總覽</span>
-      <span class="park-pill-count">1,874 家</span>
-    </button>
+    <!-- Populated dynamically based on selected county -->
   </nav>
 
   <!-- Main Split Container -->
@@ -898,6 +987,7 @@ html_template = '''<!DOCTYPE html>
       <div class="client-list" id="clientList">
         <!-- Rendered by JavaScript -->
       </div>
+
     </aside>
 
     <!-- Map Container -->
@@ -1001,15 +1091,15 @@ html_template = '''<!DOCTYPE html>
       <form id="formAddClient">
         <div class="form-group">
           <label>公司 / 廠房名稱 *</label>
-          <input type="text" id="addName" required placeholder="例如：台達電子工業 (中壢二廠)" />
+          <input type="text" id="addName" required placeholder="例如：台達電子工業" />
         </div>
         <div class="form-group">
           <label>所在路段 *</label>
-          <input type="text" id="addRoad" required placeholder="例如：中園路、吉林路" />
+          <input type="text" id="addRoad" required placeholder="例如：中園路、科技一路、中華路" />
         </div>
         <div class="form-group">
           <label>完整地址 *</label>
-          <input type="text" id="addAddress" required placeholder="桃園市中壢區..." />
+          <input type="text" id="addAddress" required placeholder="例如：苗栗縣竹南鎮..." />
         </div>
         <div style="display:flex; gap:10px;">
           <div class="form-group" style="flex:1;">
@@ -1028,7 +1118,7 @@ html_template = '''<!DOCTYPE html>
           </div>
           <div class="form-group" style="flex:1;">
             <label>聯絡電話</label>
-            <input type="text" id="addPhone" placeholder="例如：03-452-xxxx" />
+            <input type="text" id="addPhone" placeholder="例如：037-58xxxx、06-505xxxx" />
           </div>
         </div>
         <div class="form-group">
@@ -1054,10 +1144,13 @@ html_template = '''<!DOCTYPE html>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   
   <script>
-    // --- 桃園 7 大園區真實廠商資料庫 ---
-    const ALL_PARKS_DATA = __PARKS_DATA_PLACEHOLDER__;
+    // --- 全台工業與科技園區核心資料庫 ---
+    const DATABASE_BUNDLE = __DATABASE_BUNDLE_PLACEHOLDER__;
+    const COUNTIES = DATABASE_BUNDLE.counties;
+    const PARKS = DATABASE_BUNDLE.parks;
 
     // State Variables
+    let currentCounty = "taoyuan";
     let currentPark = "zhongli";
     let clients = [];
     let activeIndustry = "ALL";
@@ -1072,61 +1165,233 @@ html_template = '''<!DOCTYPE html>
     let searchDebounceTimer = null;
     let markerDebounceTimer = null;
 
-    // Load Data for current park
-    function loadParkData(parkId) {
-      currentPark = parkId;
+    // Helper: Get localStorage key for a specific park
+    function getParkStorageKey(pid) {
+      if (pid === "zhongli") return "sales_visit_clients_v744";
+      return `sales_visit_clients_${pid}`;
+    }
+
+    // Load persisted park status/notes/visit_logs from localStorage
+    function getPersistedParkClients(pid) {
+      const parkCfg = PARKS[pid];
+      if (!parkCfg || !parkCfg.clients) return [];
       
-      let baseClients = [];
-      if (parkId === "all") {
-        baseClients = [];
-        Object.keys(ALL_PARKS_DATA).forEach(pid => {
-          baseClients = baseClients.concat(ALL_PARKS_DATA[pid].clients);
+      const storageKey = getParkStorageKey(pid);
+      const stored = localStorage.getItem(storageKey);
+      if (!stored) {
+        return parkCfg.clients.map(c => ({ ...c, park_id: pid, county_id: parkCfg.county_id, visit_logs: c.visit_logs || [] }));
+      }
+
+      try {
+        const storedList = JSON.parse(stored);
+        const mapById = {};
+        storedList.forEach(item => {
+          mapById[item.id] = {
+            status: item.status,
+            notes: item.notes,
+            visit_logs: item.visit_logs || []
+          };
+        });
+
+        return parkCfg.clients.map(c => {
+          if (mapById[c.id]) {
+            return {
+              ...c,
+              park_id: pid,
+              county_id: parkCfg.county_id,
+              status: mapById[c.id].status,
+              notes: mapById[c.id].notes,
+              visit_logs: mapById[c.id].visit_logs || []
+            };
+          }
+          return { ...c, park_id: pid, county_id: parkCfg.county_id, visit_logs: c.visit_logs || [] };
+        });
+      } catch (e) {
+        return parkCfg.clients.map(c => ({ ...c, park_id: pid, county_id: parkCfg.county_id, visit_logs: c.visit_logs || [] }));
+      }
+    }
+
+    // Save client changes back to appropriate park's localStorage
+    function saveCurrentParkData() {
+      if (currentPark.startsWith("all_") || currentPark === "all_taiwan") {
+        // Group clients by their originating park and save per park
+        const grouped = {};
+        clients.forEach(c => {
+          const pid = c.park_id || currentPark;
+          if (!grouped[pid]) grouped[pid] = [];
+          grouped[pid].push(c);
+        });
+        Object.keys(grouped).forEach(pid => {
+          localStorage.setItem(getParkStorageKey(pid), JSON.stringify(grouped[pid]));
         });
       } else {
-        baseClients = ALL_PARKS_DATA[parkId] ? ALL_PARKS_DATA[parkId].clients : [];
+        localStorage.setItem(getParkStorageKey(currentPark), JSON.stringify(clients));
+      }
+    }
+
+    // --- Render County Navigation (Tier 1) ---
+    function renderCountyNavBar() {
+      const nav = document.getElementById('countyNavBar');
+      nav.innerHTML = "";
+
+      // 1. 各縣市按鈕
+      Object.keys(COUNTIES).forEach(cid => {
+        const cinfo = COUNTIES[cid];
+        const parkIds = cinfo.parks || [];
+        const totalCount = parkIds.reduce((sum, pid) => sum + (PARKS[pid] ? PARKS[pid].clients.length : 0), 0);
+
+        const btn = document.createElement('button');
+        btn.className = `county-pill ${cid === currentCounty ? 'active' : ''}`;
+        btn.setAttribute('data-county', cid);
+        btn.innerHTML = `
+          <span>${cinfo.icon} ${cinfo.name}</span>
+          <span class="county-pill-count">${totalCount.toLocaleString()}</span>
+        `;
+        btn.onclick = () => switchCounty(cid);
+        nav.appendChild(btn);
+      });
+
+      // 2. 全台總覽按鈕
+      const allTaiwanTotal = Object.values(PARKS).reduce((sum, p) => sum + p.clients.length, 0);
+      const allBtn = document.createElement('button');
+      allBtn.className = `county-pill ${currentCounty === 'all' ? 'active' : ''}`;
+      allBtn.setAttribute('data-county', 'all');
+      allBtn.innerHTML = `
+        <span>🌐 全台 17 大園區</span>
+        <span class="county-pill-count">${allTaiwanTotal.toLocaleString()}</span>
+      `;
+      allBtn.onclick = () => switchCounty('all');
+      nav.appendChild(allBtn);
+    }
+
+    // --- Render Park Navigation (Tier 2) ---
+    function renderParkNavBar() {
+      const nav = document.getElementById('parkNavBar');
+      nav.innerHTML = "";
+
+      let parksToShow = [];
+      let overviewPillTitle = "";
+      let overviewPillId = "";
+      let overviewCount = 0;
+
+      if (currentCounty === 'all') {
+        parksToShow = Object.keys(PARKS);
+        overviewPillTitle = "🌐 全台 17 大園區總覽";
+        overviewPillId = "all_taiwan";
+        overviewCount = parksToShow.reduce((s, pid) => s + PARKS[pid].clients.length, 0);
+      } else {
+        const cinfo = COUNTIES[currentCounty];
+        parksToShow = cinfo.parks || [];
+        overviewPillTitle = `🌐 全${cinfo.name} ${parksToShow.length} 大園區總覽`;
+        overviewPillId = `all_${currentCounty}`;
+        overviewCount = parksToShow.reduce((s, pid) => s + (PARKS[pid] ? PARKS[pid].clients.length : 0), 0);
       }
 
-      // Check localStorage for saved visit statuses/notes/visit_logs
-      const storageKey = parkId === "zhongli" ? "sales_visit_clients_v744" : `sales_visit_clients_${parkId}`;
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        try {
-          const storedList = JSON.parse(stored);
-          const statusMap = {};
-          storedList.forEach(item => {
-            statusMap[item.id] = { 
-              status: item.status, 
-              notes: item.notes,
-              visit_logs: item.visit_logs || []
-            };
-          });
-          clients = baseClients.map(c => {
-            if (statusMap[c.id]) {
-              return { 
-                ...c, 
-                status: statusMap[c.id].status, 
-                notes: statusMap[c.id].notes,
-                visit_logs: statusMap[c.id].visit_logs || []
-              };
-            }
-            return { ...c, visit_logs: c.visit_logs || [] };
-          });
-        } catch (e) {
-          clients = JSON.parse(JSON.stringify(baseClients)).map(c => ({ ...c, visit_logs: c.visit_logs || [] }));
+      parksToShow.forEach(pid => {
+        const pcfg = PARKS[pid];
+        if (!pcfg) return;
+
+        const btn = document.createElement('button');
+        btn.className = `park-pill ${pid === currentPark ? 'active' : ''}`;
+        btn.setAttribute('data-park', pid);
+        btn.innerHTML = `
+          <span>📍 ${pcfg.name}</span>
+          <span class="park-pill-count">${pcfg.clients.length} 家</span>
+        `;
+        btn.onclick = () => switchPark(pid);
+        nav.appendChild(btn);
+      });
+
+      // Add County Overview Pill
+      const ovBtn = document.createElement('button');
+      ovBtn.className = `park-pill ${currentPark === overviewPillId ? 'active' : ''}`;
+      ovBtn.setAttribute('data-park', overviewPillId);
+      ovBtn.innerHTML = `
+        <span>${overviewPillTitle}</span>
+        <span class="park-pill-count">${overviewCount.toLocaleString()} 家</span>
+      `;
+      ovBtn.onclick = () => switchPark(overviewPillId);
+      nav.appendChild(ovBtn);
+    }
+
+    // --- Switch County ---
+    window.switchCounty = function(cid) {
+      currentCounty = cid;
+      renderCountyNavBar();
+
+      let targetPark = "";
+      if (cid === 'all') {
+        targetPark = "all_taiwan";
+      } else {
+        targetPark = COUNTIES[cid].default_park || COUNTIES[cid].parks[0];
+      }
+
+      renderParkNavBar();
+      switchPark(targetPark);
+    };
+
+    // --- Switch Park ---
+    window.switchPark = function(parkId, newSearchTerm) {
+      currentPark = parkId;
+
+      // Update Park Pills active state
+      document.querySelectorAll('#parkNavBar .park-pill').forEach(pill => {
+        if (pill.getAttribute('data-park') === parkId) {
+          pill.classList.add('active');
+          pill.scrollIntoView({ behavior: 'smooth', inline: 'center' });
+        } else {
+          pill.classList.remove('active');
         }
-      } else {
-        clients = JSON.parse(JSON.stringify(baseClients)).map(c => ({ ...c, visit_logs: c.visit_logs || [] }));
+      });
+
+      if (newSearchTerm !== undefined) {
+        const input = document.getElementById('searchInput');
+        input.value = newSearchTerm;
+        searchQuery = newSearchTerm;
+        const clearBtn = document.getElementById('btnClearSearch');
+        if (clearBtn) clearBtn.style.display = newSearchTerm ? 'block' : 'none';
       }
 
-      // Update titles
-      if (parkId === "all") {
-        document.getElementById('headerTitle').innerText = '桃園外勤巡訪地圖總中樞 · 全桃 7 大園區總覽';
-        document.getElementById('headerSubtitle').innerText = `合計 1,874 家全區廠商（中壢、龜山、華亞、平鎮、觀音、大園、幼獅）`;
+      loadParkData(parkId);
+    };
+
+    // --- Cross-County & Cross-Park Direct Switcher ---
+    window.switchCountyAndPark = function(countyId, parkId, term) {
+      currentCounty = countyId;
+      renderCountyNavBar();
+      renderParkNavBar();
+      switchPark(parkId, term);
+    };
+
+    // Load Data for current park
+    function loadParkData(parkId) {
+      let baseClients = [];
+
+      if (parkId === "all_taiwan") {
+        baseClients = [];
+        Object.keys(PARKS).forEach(pid => {
+          baseClients = baseClients.concat(getPersistedParkClients(pid));
+        });
+        document.getElementById('headerTitle').innerText = '全台外勤巡訪地圖總中樞 · 全台 17 大園區總覽';
+        document.getElementById('headerSubtitle').innerText = `收錄桃園、苗栗、臺南共 4,244 家核心廠商 · 60 FPS 外勤極速地圖`;
+      } else if (parkId.startsWith("all_")) {
+        const cid = parkId.replace("all_", "");
+        const cinfo = COUNTIES[cid];
+        baseClients = [];
+        (cinfo.parks || []).forEach(pid => {
+          baseClients = baseClients.concat(getPersistedParkClients(pid));
+        });
+        document.getElementById('headerTitle').innerText = `${cinfo.name}外勤巡訪地圖總中樞 · 全縣/市總覽`;
+        document.getElementById('headerSubtitle').innerText = `${cinfo.name} ${cinfo.parks.length} 大園區合計 ${baseClients.length.toLocaleString()} 家廠商巡訪指南`;
       } else {
-        const pcfg = ALL_PARKS_DATA[parkId];
+        baseClients = getPersistedParkClients(parkId);
+        const pcfg = PARKS[parkId];
+        const countyName = COUNTIES[pcfg.county_id] ? COUNTIES[pcfg.county_id].name : '';
         document.getElementById('headerTitle').innerText = `業務外勤拜訪地圖 - ${pcfg.name}`;
-        document.getElementById('headerSubtitle').innerText = `${pcfg.name} · ${pcfg.badge} 廠商全區地圖（支援上市櫃、產業、同路巡訪快篩）`;
+        document.getElementById('headerSubtitle').innerText = `${countyName} · ${pcfg.name} · ${pcfg.clients.length} 家廠商全區地圖（支援上市櫃、產業、同路巡訪快篩）`;
       }
+
+      clients = baseClients;
 
       // Reset filters when switching park
       activeIndustry = "ALL";
@@ -1137,22 +1402,25 @@ html_template = '''<!DOCTYPE html>
       setupRoadChips();
       updateBadgeCounts();
 
-      // Pan/fly map
+      // Pan/fly map smoothly
       if (map) {
-        if (parkId === "all") {
-          map.flyTo([25.01, 121.26], 12, { duration: 1 });
+        if (parkId === "all_taiwan") {
+          map.flyTo([24.2, 120.9], 8, { duration: 1.2 });
+        } else if (parkId === "all_taoyuan") {
+          map.flyTo([24.98, 121.24], 11, { duration: 1 });
+        } else if (parkId === "all_miaoli") {
+          map.flyTo([24.58, 120.83], 11, { duration: 1 });
+        } else if (parkId === "all_tainan") {
+          map.flyTo([23.10, 120.28], 11, { duration: 1 });
         } else {
-          const pcfg = ALL_PARKS_DATA[parkId];
-          map.flyTo(pcfg.center, pcfg.zoom, { duration: 1 });
+          const pcfg = PARKS[parkId];
+          if (pcfg && pcfg.center) {
+            map.flyTo(pcfg.center, pcfg.zoom || 14, { duration: 1 });
+          }
         }
       }
 
       renderList();
-    }
-
-    function saveCurrentParkData() {
-      const storageKey = currentPark === "zhongli" ? "sales_visit_clients_v744" : `sales_visit_clients_${currentPark}`;
-      localStorage.setItem(storageKey, JSON.stringify(clients));
     }
 
     // --- Initialize Leaflet Map ---
@@ -1160,7 +1428,7 @@ html_template = '''<!DOCTYPE html>
       map = L.map('map', {
         zoomControl: true,
         attributionControl: false
-      }).setView([24.9818, 121.2385], 15);
+      }).setView([24.9818, 121.2385], 14);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19
@@ -1176,7 +1444,7 @@ html_template = '''<!DOCTYPE html>
       clearTimeout(markerDebounceTimer);
       markerDebounceTimer = setTimeout(() => {
         updateMarkers(filteredClients);
-      }, 100);
+      }, 90);
     }
 
     function updateMarkers(filteredClients) {
@@ -1205,15 +1473,18 @@ html_template = '''<!DOCTYPE html>
 
         const isDone = c.status === '已拜訪';
         const logCount = (c.visit_logs && c.visit_logs.length) || 0;
+        const parkName = (c.park_id && PARKS[c.park_id]) ? PARKS[c.park_id].name : '';
+
         const popupContent = `
-          <div style="font-family:'Noto Sans TC',sans-serif; min-width:220px; padding:2px;">
+          <div style="font-family:'Noto Sans TC',sans-serif; min-width:230px; padding:2px;">
             <div style="font-weight:800; font-size:14px; color:#16213A; margin-bottom:3px; line-height:1.3;">
               ${c.name}
             </div>
             <div style="font-size:11px; color:#68717F; margin-bottom:6px;">
               ${c.address}
             </div>
-            <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px;">
+            <div style="display:flex; gap:5px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+              ${parkName ? `<span style="font-size:10.5px; font-weight:800; color:#16213A; background:#E5E7EB; padding:1px 5px; border-radius:4px;">${parkName}</span>` : ''}
               <span style="font-size:11px; font-weight:700; color:#1A4DA1; background:#EEF3FC; padding:2px 6px; border-radius:4px;">${c.road}</span>
               <span style="font-size:11px; color:#68717F;">${c.industry}</span>
             </div>
@@ -1245,7 +1516,7 @@ html_template = '''<!DOCTYPE html>
         bounds.extend([c.lat, c.lng]);
       });
 
-      // Fit map if we have markers
+      // Fit map if moderate number of markers
       if (filteredClients.length > 0 && bounds.isValid() && filteredClients.length <= 150) {
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
       }
@@ -1305,7 +1576,7 @@ html_template = '''<!DOCTYPE html>
       const existingHint = document.getElementById('loadMoreHint');
       if (existingHint) existingHint.remove();
 
-      // Visited Summary Banner (當在「已拜訪」頁面時特別顯示)
+      // Visited Summary Banner
       if (isReset && activeStatus === "已拜訪") {
         const totalLogs = currentFiltered.reduce((sum, c) => sum + ((c.visit_logs && c.visit_logs.length) || 0), 0);
         const visitedBanner = document.createElement('div');
@@ -1322,7 +1593,7 @@ html_template = '''<!DOCTYPE html>
         container.appendChild(visitedBanner);
       }
 
-      // Zero Results Handling
+      // Zero Results Handling with Cross-County & Cross-Park Discovery
       if (currentFiltered.length === 0) {
         const q = (searchQuery || "").trim();
         let noticeHtml = '';
@@ -1344,30 +1615,43 @@ html_template = '''<!DOCTYPE html>
                 </button>
               </div>
             `;
-          } else if (currentPark !== 'all') {
-            let otherMatches = [];
-            Object.keys(ALL_PARKS_DATA).forEach(pid => {
+          } else {
+            // Cross-County & Cross-Park Scan
+            let crossMatches = [];
+            Object.keys(PARKS).forEach(pid => {
               if (pid !== currentPark) {
-                const p = ALL_PARKS_DATA[pid];
+                const p = PARKS[pid];
                 const matches = p.clients.filter(c => {
                   const str = `${c.name || ''} ${c.address || ''} ${c.road || ''} ${c.industry || ''} ${c.contact || ''} ${c.phone || ''} ${c.notes || ''}`.toLowerCase();
                   return keywords.every(kw => str.includes(kw));
                 });
                 if (matches.length > 0) {
-                  otherMatches.push({ pid, name: p.name, count: matches.length, sample: matches[0].name });
+                  const countyName = COUNTIES[p.county_id] ? COUNTIES[p.county_id].name : '';
+                  crossMatches.push({
+                    pid,
+                    county_id: p.county_id,
+                    county_name: countyName,
+                    name: p.name,
+                    count: matches.length,
+                    sample: matches[0].name
+                  });
                 }
               }
             });
 
-            if (otherMatches.length > 0) {
+            if (crossMatches.length > 0) {
+              const safeQ = q.replace(/'/g, "\\\\'");
               noticeHtml = `
                 <div style="background:#EFF6FF; border:1px solid #BFDBFE; padding:12px; border-radius:8px; margin-bottom:12px; text-align:left; font-size:12.5px; color:#1E40AF;">
-                  📍 在目前園區未找到「<strong>${q}</strong>」，但在桃園其他園區找到符合廠商：<br>
-                  <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
-                    ${otherMatches.map(m => `
+                  📍 在目前園區未找到「<strong>${q}</strong>」，但在其他縣市或園區找到符合廠商：<br>
+                  <div style="margin-top:6px; display:flex; flex-direction:column; gap:5px;">
+                    ${crossMatches.map(m => `
                       <div style="display:flex; justify-content:space-between; align-items:center; background:#FFF; padding:6px 10px; border-radius:6px; border:1px solid #DBEAFE;">
-                        <span><strong>${m.name}</strong> (${m.count} 家，如 ${m.sample})</span>
-                        <button onclick="switchPark('${m.pid}', '${q.replace(/'/g, "\\\\'")}')" class="btn btn-primary" style="padding:2px 8px; font-size:11px;">前往 ➔</button>
+                        <div>
+                          <strong>${m.county_name} · ${m.name}</strong> 
+                          <span style="font-size:11px; color:#4B5563;">(${m.count} 家，如 ${m.sample})</span>
+                        </div>
+                        <button onclick="switchCountyAndPark('${m.county_id}', '${m.pid}', '${safeQ}')" class="btn btn-primary" style="padding:3px 9px; font-size:11px;">前往 ➔</button>
                       </div>
                     `).join('')}
                   </div>
@@ -1424,6 +1708,8 @@ html_template = '''<!DOCTYPE html>
           `;
         }
 
+        const parkName = (c.park_id && PARKS[c.park_id]) ? PARKS[c.park_id].name : '';
+
         card.innerHTML = `
           <div class="card-top">
             <div class="card-title">${c.name}</div>
@@ -1431,6 +1717,7 @@ html_template = '''<!DOCTYPE html>
           </div>
 
           <div class="card-address">
+            ${parkName && (currentPark.startsWith('all_') || currentPark === 'all_taiwan') ? `<span style="font-size:10.5px; font-weight:800; color:#1F2937; background:#E5E7EB; padding:1px 5px; border-radius:4px;">${parkName}</span>` : ''}
             <span class="card-road">${c.road}</span>
             <span>${c.address}</span>
           </div>
@@ -1679,7 +1966,6 @@ html_template = '''<!DOCTYPE html>
         }
       });
 
-      // Sort by factory count descending
       const sortedRoads = Object.keys(roadMap).sort((a, b) => roadMap[b] - roadMap[a]);
       const roadContainer = document.getElementById('roadChips');
       roadContainer.innerHTML = "";
@@ -1711,28 +1997,6 @@ html_template = '''<!DOCTYPE html>
       });
     }
 
-    // --- Park Switcher Handler ---
-    window.switchPark = function(parkId, newSearchTerm) {
-      document.querySelectorAll('#parkNavBar .park-pill').forEach(pill => {
-        if (pill.getAttribute('data-park') === parkId) {
-          pill.classList.add('active');
-          pill.scrollIntoView({ behavior: 'smooth', inline: 'center' });
-        } else {
-          pill.classList.remove('active');
-        }
-      });
-
-      if (newSearchTerm !== undefined) {
-        const input = document.getElementById('searchInput');
-        input.value = newSearchTerm;
-        searchQuery = newSearchTerm;
-        const clearBtn = document.getElementById('btnClearSearch');
-        if (clearBtn) clearBtn.style.display = newSearchTerm ? 'block' : 'none';
-      }
-
-      loadParkData(parkId);
-    };
-
     window.clearAllFiltersAndSearch = function() {
       activeRoad = 'ALL';
       activeIndustry = 'ALL';
@@ -1747,15 +2011,9 @@ html_template = '''<!DOCTYPE html>
     // --- Event Listeners Initialization ---
     document.addEventListener("DOMContentLoaded", () => {
       initMap();
-      loadParkData("zhongli");
-
-      // Park Navigation Pills Click
-      document.querySelectorAll('#parkNavBar .park-pill').forEach(pill => {
-        pill.addEventListener('click', () => {
-          const pid = pill.getAttribute('data-park');
-          switchPark(pid);
-        });
-      });
+      renderCountyNavBar();
+      renderParkNavBar();
+      switchCounty("taoyuan");
 
       // Infinite scroll listener for client list
       const clientListContainer = document.getElementById('clientList');
@@ -1768,7 +2026,7 @@ html_template = '''<!DOCTYPE html>
         }
       });
 
-      // Search Input Handling (with robust Chinese IME & Button support)
+      // Search Input Handling
       const searchInput = document.getElementById('searchInput');
       const clearBtn = document.getElementById('btnClearSearch');
       const searchBtn = document.getElementById('btnDoSearch');
@@ -1875,7 +2133,6 @@ html_template = '''<!DOCTYPE html>
         if (!client.visit_logs) client.visit_logs = [];
         client.visit_logs.unshift(newLog);
 
-        // Update latest notes summary
         client.notes = newLog.summary;
 
         if (document.getElementById('logAutoSetDone').checked) {
@@ -1895,7 +2152,7 @@ html_template = '''<!DOCTYPE html>
         document.getElementById('modalVisitLog').classList.remove('open');
       });
 
-      // Locate User GPS (外勤業務神功能)
+      // Locate User GPS
       document.getElementById('btnLocateMe').addEventListener('click', () => {
         if (!navigator.geolocation) {
           alert("您的設備或瀏覽器不支援 GPS 定位");
@@ -1942,14 +2199,18 @@ html_template = '''<!DOCTYPE html>
         }
       });
 
-      // Export CSV (包含外勤拜訪紀錄與下次待辦)
+      // Export CSV (含縣市、園區、外勤拜訪紀錄與下次待辦)
       document.getElementById('btnExport').addEventListener('click', () => {
-        let csvContent = "\\uFEFFid,name,road,address,lat,lng,industry,is_listed,status,contact,phone,notes,visit_count,latest_visit_date,latest_visit_contact,latest_visit_outcome,latest_visit_summary,latest_visit_next\\n";
+        let csvContent = "\\uFEFFid,county,park,name,road,address,lat,lng,industry,is_listed,status,contact,phone,notes,visit_count,latest_visit_date,latest_visit_contact,latest_visit_outcome,latest_visit_summary,latest_visit_next\\n";
         clients.forEach(c => {
           const logs = c.visit_logs || [];
           const latest = logs.length > 0 ? logs[0] : {};
+          const pcfg = (c.park_id && PARKS[c.park_id]) ? PARKS[c.park_id] : {};
+          const cinfo = (pcfg.county_id && COUNTIES[pcfg.county_id]) ? COUNTIES[pcfg.county_id] : {};
           const row = [
             c.id,
+            `"${(cinfo.name || c.county_id || '').replace(/"/g, '""')}"`,
+            `"${(pcfg.name || c.park_id || '').replace(/"/g, '""')}"`,
             `"${(c.name || '').replace(/"/g, '""')}"`,
             `"${(c.road || '').replace(/"/g, '""')}"`,
             `"${(c.address || '').replace(/"/g, '""')}"`,
@@ -1975,7 +2236,7 @@ html_template = '''<!DOCTYPE html>
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        const parkName = currentPark === 'all' ? '全桃7大園區' : (ALL_PARKS_DATA[currentPark] ? ALL_PARKS_DATA[currentPark].name : '園區');
+        const parkName = PARKS[currentPark] ? PARKS[currentPark].name : currentPark;
         a.download = `${parkName}_業務拜訪與洽談紀錄_${new Date().toISOString().slice(0,10)}.csv`;
         a.click();
         URL.revokeObjectURL(url);
@@ -2010,9 +2271,11 @@ html_template = '''<!DOCTYPE html>
 
       document.getElementById('formAddClient').addEventListener('submit', (e) => {
         e.preventDefault();
-        const center = (ALL_PARKS_DATA[currentPark] && ALL_PARKS_DATA[currentPark].center) || [24.9818, 121.2385];
+        const center = (PARKS[currentPark] && PARKS[currentPark].center) || [24.9818, 121.2385];
         const newClient = {
           id: Date.now(),
+          park_id: currentPark,
+          county_id: currentCounty,
           name: document.getElementById('addName').value.trim(),
           road: document.getElementById('addRoad').value.trim(),
           address: document.getElementById('addAddress').value.trim(),
@@ -2054,6 +2317,8 @@ html_template = '''<!DOCTYPE html>
 
         imported.push({
           id: Date.now() + i,
+          park_id: currentPark,
+          county_id: currentCounty,
           name: row[1] || `客戶 ${i}`,
           road: row[2] || "園區內",
           address: row[3] || "",
@@ -2088,9 +2353,9 @@ html_template = '''<!DOCTYPE html>
 </html>
 '''
 
-full_html = html_template.replace('__PARKS_DATA_PLACEHOLDER__', all_parks_json)
+full_html = html_template.replace('__DATABASE_BUNDLE_PLACEHOLDER__', database_json)
 
 with open('index.html', 'w', encoding='utf-8') as f:
     f.write(full_html)
 
-print(f"Generated index.html successfully! Size: {len(full_html.encode('utf-8'))} bytes")
+print(f"[OK] 成功編譯生成 index.html！檔案大小：{len(full_html.encode('utf-8')):,} bytes")
