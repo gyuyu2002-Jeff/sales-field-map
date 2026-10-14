@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+*$py.class
+dump.html
+test_check.js
+test_script.js
