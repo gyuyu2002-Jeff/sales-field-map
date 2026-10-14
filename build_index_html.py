@@ -51,7 +51,7 @@ html_template = '''<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>全台外勤巡訪地圖總中樞 - 西部北到南至東部北到南 全台各縣市園區指南</title>
+  <title>全台外勤巡訪地圖總中樞 - 18 縣市 72 大工業與科技園區巡訪指南</title>
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -894,6 +894,128 @@ html_template = '''<!DOCTYPE html>
       position: relative;
     }
 
+    /* 預設常駐縣市按鈕與標籤 */
+    .btn-default-setting {
+      background: #FFFFFF;
+      border: 1px solid #CADCF8;
+      color: #1E40AF;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-default-setting:hover {
+      background: #EEF3FC;
+      border-color: #2563EB;
+      box-shadow: 0 1px 4px rgba(37, 99, 235, 0.15);
+    }
+    .btn-default-setting b {
+      color: #16213A;
+      font-weight: 900;
+    }
+    .default-pill-badge {
+      display: inline-block;
+      font-size: 9.5px;
+      font-weight: 900;
+      color: #B45309;
+      background: #FEF3C7;
+      border: 1px solid #FDE68A;
+      border-radius: 4px;
+      padding: 1px 4px;
+      margin-left: 4px;
+      line-height: 1.2;
+    }
+
+    /* 預設縣市選擇視窗網格與卡片 */
+    .county-select-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 600px) {
+      .county-select-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+      }
+    }
+    .county-select-card {
+      background: #FFFFFF;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 11px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: all 0.15s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+    }
+    .county-select-card:hover {
+      border-color: var(--blue);
+      background: #F4F8FD;
+    }
+    .county-select-card.selected {
+      border-color: var(--blue);
+      background: #EEF3FC;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+    }
+    .county-select-card .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .county-select-card .card-name {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--navy);
+    }
+    .county-select-card .card-check {
+      font-size: 13px;
+      color: var(--blue);
+      display: none;
+      font-weight: 900;
+    }
+    .county-select-card.selected .card-check {
+      display: inline-block;
+    }
+    .county-select-card .card-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    /* 輕量級 Toast 提示框 */
+    .toast-notice {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(120px);
+      background: rgba(22, 33, 58, 0.95);
+      color: #FFFFFF;
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    .toast-notice.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
     /* ========================================================
        📱 RWD 響應式網頁設計核心樣式 (Responsive Web Design)
        ======================================================== */
@@ -1110,6 +1232,9 @@ html_template = '''<!DOCTYPE html>
     </div>
 
     <div class="header-actions">
+      <button class="btn btn-default-setting" id="btnDefaultCountySetting" onclick="openDefaultCountyModal(false)" title="點擊設定或更改預設常駐縣市">
+        <span>⭐</span><span class="btn-text"> 預設: </span><b id="headerDefaultCountyLabel">桃園市</b>
+      </button>
       <button class="btn" id="btnExport" title="匯出當前拜訪狀態為 CSV 檔（含詳細拜訪紀錄與摘要）">
         <span>📤</span><span class="btn-text"> 匯出記錄</span>
       </button>
@@ -1361,6 +1486,61 @@ html_template = '''<!DOCTYPE html>
     </div>
   </div>
 
+  <!-- Modal 3: 選擇預設常駐縣市 (首次進入詢問與隨時切換) -->
+  <div class="modal-overlay" id="modalDefaultCounty">
+    <div class="modal-card" style="max-width: 660px;">
+      <!-- Modal Header -->
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; border-bottom:1.5px solid var(--border); padding-bottom:10px;">
+        <div>
+          <div style="font-size:11px; font-weight:800; color:var(--blue); text-transform:uppercase; letter-spacing:0.05em; display:flex; align-items:center; gap:5px;">
+            <span>📍</span> 常駐巡訪縣市設定
+          </div>
+          <h3 id="defaultModalTitle" style="margin:2px 0 0 0; font-size:17px; color:var(--navy); font-weight:900;">
+            請問您最常巡訪的「預設常駐縣市」是？
+          </h3>
+          <div id="defaultModalSubtitle" style="font-size:11.5px; color:var(--text-muted); margin-top:2px; line-height:1.4;">
+            日後開啟巡訪地圖時，將優先自動為您載入該縣市。（隨時可在上方導航列自由切換全台 18 縣市）
+          </div>
+        </div>
+        <button type="button" class="btn" id="btnCloseDefaultCountyModal" style="padding:4px 8px; font-size:14px;" onclick="closeDefaultCountyModal()">✕</button>
+      </div>
+
+      <!-- Quick info / Selection preview -->
+      <div id="defaultCountySelectionPreview" style="background:#EEF3FC; border:1px solid #CADCF8; border-radius:8px; padding:9px 12px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+        <div>
+          <span style="font-size:11.5px; color:#1E40AF; font-weight:700;">目前已選取：</span>
+          <span id="selectedCountyPreviewText" style="font-size:13.5px; font-weight:900; color:var(--navy);">✈️ 桃園市</span>
+        </div>
+        <span style="font-size:10.5px; background:#DBEAFE; color:#1E40AF; padding:2px 8px; border-radius:12px; font-weight:800;">點選下方卡片切換</span>
+      </div>
+
+      <!-- Scrollable County List -->
+      <div style="max-height: 50vh; max-height: 50dvh; overflow-y: auto; padding-right: 2px; display:flex; flex-direction:column; gap:10px;">
+        <div class="county-select-grid" id="defaultCountyGrid"></div>
+        <div style="border-top:1px dashed var(--border); padding-top:8px;">
+          <div class="county-select-grid" id="defaultCountyGridAll"></div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div style="margin-top:12px; border-top:1.5px solid var(--border); padding-top:10px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px;">
+        <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--navy); cursor:pointer;">
+          <input type="checkbox" id="chkRememberDefaultCounty" checked style="accent-color:var(--blue); width:15px; height:15px;" />
+          <span>記住此設定，下次開啟直接載入</span>
+        </label>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn" onclick="skipDefaultCountyModal()">稍後再選</button>
+          <button type="button" class="btn btn-primary" onclick="confirmDefaultCounty()" style="padding:7px 14px; font-weight:800;">
+            ✅ 確認並開始巡訪
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Element -->
+  <div class="toast-notice" id="toastNotice"></div>
+
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   
@@ -1378,9 +1558,12 @@ html_template = '''<!DOCTYPE html>
     ];
     const EAST_COUNTY_KEYS = ["yilan", "hualien", "taitung"];
 
-    // State Variables - 預設從西部最北端（基隆市）依序展開
-    let currentCounty = "keelung";
-    let currentPark = "keelung_liudu";
+    // State Variables - 支援個人化常駐預設縣市
+    const DEFAULT_COUNTY_KEY = "sales_map_default_county";
+    const DEFAULT_PROMPTED_KEY = "sales_map_default_county_prompted";
+    let modalSelectedCounty = "taoyuan";
+    let currentCounty = "taoyuan";
+    let currentPark = "zhongli";
     let clients = [];
     let activeIndustry = "ALL";
     let activeRoad = "ALL";
@@ -1475,22 +1658,164 @@ html_template = '''<!DOCTYPE html>
       }
     }
 
-    // --- Render County Navigation (Tier 1: 西部北到南 -> 東部北到南) ---
+    // 18 縣市依地理動線排列（基隆至屏東，再至宜蘭、花蓮、台東）
+    const ALL_COUNTY_KEYS = [
+      "keelung", "taipei", "newtaipei", "taoyuan", "hsinchu_city",
+      "hsinchu_county", "miaoli", "taichung", "changhua", "nantou",
+      "yunlin", "chiayi", "tainan", "kaohsiung", "pingtung",
+      "yilan", "hualien", "taitung"
+    ];
+
+    // --- 預設常駐縣市設定 (First-Visit & Default County Setting) ---
+    function showToast(msg) {
+      let toast = document.getElementById('toastNotice');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toastNotice';
+        toast.className = 'toast-notice';
+        document.body.appendChild(toast);
+      }
+      toast.innerHTML = msg;
+      toast.classList.add('show');
+      if (window._toastTimer) clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2600);
+    }
+
+    function updateDefaultCountyHeaderUI(cid) {
+      const label = document.getElementById('headerDefaultCountyLabel');
+      if (!label) return;
+      if (cid === 'all') {
+        label.innerText = '全台';
+      } else if (COUNTIES[cid]) {
+        label.innerText = COUNTIES[cid].name;
+      } else {
+        label.innerText = '未設定';
+      }
+    }
+
+    window.openDefaultCountyModal = function(isFirstVisit = false) {
+      const modal = document.getElementById('modalDefaultCounty');
+      if (!modal) return;
+
+      const saved = localStorage.getItem(DEFAULT_COUNTY_KEY) || currentCounty || "taoyuan";
+      modalSelectedCounty = saved;
+
+      const titleEl = document.getElementById('defaultModalTitle');
+      const subtitleEl = document.getElementById('defaultModalSubtitle');
+      if (isFirstVisit) {
+        if (titleEl) titleEl.innerText = "請問您最常巡訪的「預設常駐縣市」是？";
+        if (subtitleEl) subtitleEl.innerText = "日後開啟巡訪地圖時，將優先自動為您載入該縣市與園區。（隨時可在上方隨選切換其他縣市）";
+      } else {
+        if (titleEl) titleEl.innerText = "變更「預設常駐縣市」";
+        if (subtitleEl) subtitleEl.innerText = "請選擇日後開啟網站時優先載入的預設縣市：";
+      }
+
+      renderDefaultCountyCards();
+      updateSelectedCountyPreview();
+      modal.classList.add('open');
+    };
+
+    window.closeDefaultCountyModal = function() {
+      const modal = document.getElementById('modalDefaultCounty');
+      if (modal) modal.classList.remove('open');
+    };
+
+    window.selectDefaultCountyInModal = function(cid) {
+      modalSelectedCounty = cid;
+      renderDefaultCountyCards();
+      updateSelectedCountyPreview();
+    };
+
+    window.confirmDefaultCounty = function() {
+      const remember = document.getElementById('chkRememberDefaultCounty')?.checked ?? true;
+      if (remember) {
+        localStorage.setItem(DEFAULT_COUNTY_KEY, modalSelectedCounty);
+        localStorage.setItem(DEFAULT_PROMPTED_KEY, "true");
+      }
+      switchCounty(modalSelectedCounty);
+      updateDefaultCountyHeaderUI(modalSelectedCounty);
+      renderCountyNavBar();
+      closeDefaultCountyModal();
+
+      const cname = modalSelectedCounty === 'all' ? '全台 72 大園區' : (COUNTIES[modalSelectedCounty]?.name || '所選縣市');
+      showToast(`⭐ 已成功將【${cname}】設為預設開啟縣市！`);
+    };
+
+    window.skipDefaultCountyModal = function() {
+      localStorage.setItem(DEFAULT_PROMPTED_KEY, "true");
+      closeDefaultCountyModal();
+      showToast("💡 您可隨時點擊頂部【⭐ 預設】按鈕重新設定常駐縣市！");
+    };
+
+    function renderDefaultCountyCards() {
+      const grid = document.getElementById('defaultCountyGrid');
+      if (grid) {
+        grid.innerHTML = "";
+        ALL_COUNTY_KEYS.forEach(cid => {
+          if (!COUNTIES[cid]) return;
+          const c = COUNTIES[cid];
+          const count = (c.parks || []).reduce((s, pid) => s + (PARKS[pid] ? PARKS[pid].clients.length : 0), 0);
+          const card = document.createElement('div');
+          card.className = `county-select-card ${modalSelectedCounty === cid ? 'selected' : ''}`;
+          card.onclick = () => selectDefaultCountyInModal(cid);
+          card.ondblclick = () => { selectDefaultCountyInModal(cid); confirmDefaultCounty(); };
+          card.innerHTML = `
+            <div class="card-head">
+              <span class="card-name">${c.icon} ${c.name}</span>
+              <span class="card-check">✓</span>
+            </div>
+            <div class="card-meta">${(c.parks || []).length} 園區 · ${count.toLocaleString()} 家廠商</div>
+          `;
+          grid.appendChild(card);
+        });
+      }
+
+      const allGrid = document.getElementById('defaultCountyGridAll');
+      if (allGrid) {
+        allGrid.innerHTML = "";
+        const allTaiwanTotal = Object.values(PARKS).reduce((sum, p) => sum + p.clients.length, 0);
+        const card = document.createElement('div');
+        card.className = `county-select-card ${modalSelectedCounty === 'all' ? 'selected' : ''}`;
+        card.onclick = () => selectDefaultCountyInModal('all');
+        card.ondblclick = () => { selectDefaultCountyInModal('all'); confirmDefaultCounty(); };
+        card.innerHTML = `
+          <div class="card-head">
+            <span class="card-name">🌐 全台 72 大園區總覽</span>
+            <span class="card-check">✓</span>
+          </div>
+          <div class="card-meta">18 縣市 · ${allTaiwanTotal.toLocaleString()} 家廠商</div>
+        `;
+        allGrid.appendChild(card);
+      }
+    }
+
+    function updateSelectedCountyPreview() {
+      const textEl = document.getElementById('selectedCountyPreviewText');
+      if (!textEl) return;
+      if (modalSelectedCounty === 'all') {
+        const allTaiwanTotal = Object.values(PARKS).reduce((sum, p) => sum + p.clients.length, 0);
+        textEl.innerText = `🌐 全台 72 大園區 (共 18 縣市 · ${allTaiwanTotal.toLocaleString()} 家廠商)`;
+      } else if (COUNTIES[modalSelectedCounty]) {
+        const c = COUNTIES[modalSelectedCounty];
+        const count = (c.parks || []).reduce((s, pid) => s + (PARKS[pid] ? PARKS[pid].clients.length : 0), 0);
+        textEl.innerText = `${c.icon} ${c.name} (共 ${(c.parks || []).length} 大園區 · ${count.toLocaleString()} 家廠商)`;
+      }
+    }
+
+    // --- Render County Navigation (Tier 1: 18 縣市依序排列，無文字標籤干擾) ---
     function renderCountyNavBar() {
       const nav = document.getElementById('countyNavBar');
       nav.innerHTML = "";
+      const savedDefault = localStorage.getItem(DEFAULT_COUNTY_KEY) || "";
 
-      // 1. 西部 (北到南) 標籤
-      const westTag = document.createElement('span');
-      westTag.className = 'region-tag';
-      westTag.innerText = '西部 (北➜南)';
-      nav.appendChild(westTag);
-
-      WEST_COUNTY_KEYS.forEach(cid => {
+      ALL_COUNTY_KEYS.forEach(cid => {
         if (!COUNTIES[cid]) return;
         const cinfo = COUNTIES[cid];
         const parkIds = cinfo.parks || [];
         const totalCount = parkIds.reduce((sum, pid) => sum + (PARKS[pid] ? PARKS[pid].clients.length : 0), 0);
+        const isDefault = (cid === savedDefault);
 
         const btn = document.createElement('button');
         btn.className = `county-pill ${cid === currentCounty ? 'active' : ''}`;
@@ -1498,51 +1823,26 @@ html_template = '''<!DOCTYPE html>
         btn.innerHTML = `
           <span>${cinfo.icon} ${cinfo.name}</span>
           <span class="county-pill-count">${totalCount.toLocaleString()}</span>
+          ${isDefault ? '<span class="default-pill-badge" title="您的預設常駐縣市">⭐預設</span>' : ''}
         `;
         btn.onclick = () => switchCounty(cid);
         nav.appendChild(btn);
       });
 
-      // 分隔線
+      // 全台總覽前分隔線
       const sep = document.createElement('div');
       sep.className = 'region-separator';
       nav.appendChild(sep);
 
-      // 2. 東部 (北到南) 標籤
-      const eastTag = document.createElement('span');
-      eastTag.className = 'region-tag';
-      eastTag.innerText = '東部 (北➜南)';
-      nav.appendChild(eastTag);
-
-      EAST_COUNTY_KEYS.forEach(cid => {
-        if (!COUNTIES[cid]) return;
-        const cinfo = COUNTIES[cid];
-        const parkIds = cinfo.parks || [];
-        const totalCount = parkIds.reduce((sum, pid) => sum + (PARKS[pid] ? PARKS[pid].clients.length : 0), 0);
-
-        const btn = document.createElement('button');
-        btn.className = `county-pill ${cid === currentCounty ? 'active' : ''}`;
-        btn.setAttribute('data-county', cid);
-        btn.innerHTML = `
-          <span>${cinfo.icon} ${cinfo.name}</span>
-          <span class="county-pill-count">${totalCount.toLocaleString()}</span>
-        `;
-        btn.onclick = () => switchCounty(cid);
-        nav.appendChild(btn);
-      });
-
-      // 3. 全台總覽按鈕
-      const sep2 = document.createElement('div');
-      sep2.className = 'region-separator';
-      nav.appendChild(sep2);
-
       const allTaiwanTotal = Object.values(PARKS).reduce((sum, p) => sum + p.clients.length, 0);
+      const isAllDefault = (savedDefault === 'all');
       const allBtn = document.createElement('button');
       allBtn.className = `county-pill ${currentCounty === 'all' ? 'active' : ''}`;
       allBtn.setAttribute('data-county', 'all');
       allBtn.innerHTML = `
         <span>🌐 全台 72 大園區</span>
         <span class="county-pill-count">${allTaiwanTotal.toLocaleString()}</span>
+        ${isAllDefault ? '<span class="default-pill-badge" title="您的預設常駐縣市">⭐預設</span>' : ''}
       `;
       allBtn.onclick = () => switchCounty('all');
       nav.appendChild(allBtn);
@@ -1648,7 +1948,7 @@ html_template = '''<!DOCTYPE html>
           baseClients = baseClients.concat(getPersistedParkClients(pid));
         });
         document.getElementById('headerTitle').innerText = '全台外勤巡訪地圖總中樞 · 18 縣市 72 大園區總覽';
-        document.getElementById('headerSubtitle').innerText = `全台合計 ${baseClients.length.toLocaleString()} 家廠商巡訪指南 · 西部北到南至東部北到南`;
+        document.getElementById('headerSubtitle').innerText = `全台合計 ${baseClients.length.toLocaleString()} 家廠商巡訪指南`;
       } else if (parkId.startsWith("all_")) {
         const cid = parkId.replace("all_", "");
         const cinfo = COUNTIES[cid];
@@ -2246,13 +2546,33 @@ html_template = '''<!DOCTYPE html>
     // --- Event Listeners Initialization ---
     document.addEventListener("DOMContentLoaded", () => {
       initMap();
+
+      // 檢查是否已設定預設常駐縣市
+      const savedDefault = localStorage.getItem(DEFAULT_COUNTY_KEY);
+      const hasPrompted = localStorage.getItem(DEFAULT_PROMPTED_KEY);
+
+      if (savedDefault && (COUNTIES[savedDefault] || savedDefault === 'all')) {
+        currentCounty = savedDefault;
+      } else {
+        // 尚未設定：預設以桃園市為啟始背景
+        currentCounty = "taoyuan";
+      }
+
+      updateDefaultCountyHeaderUI(savedDefault || "taoyuan");
       renderCountyNavBar();
       renderParkNavBar();
-      switchCounty("keelung");
+      switchCounty(currentCounty);
 
       // 手機端視圖初始化：若寬度小於 768px 預設為上下分割
       if (window.innerWidth <= 768) {
         setMobileView("split");
+      }
+
+      // 若為第一次造訪（未設定預設縣市且尚未詢問過），主動彈出詢問視窗
+      if (!savedDefault && !hasPrompted) {
+        setTimeout(() => {
+          openDefaultCountyModal(true);
+        }, 350);
       }
 
       // 監聽螢幕旋轉與縮放 (Orientation & Resize)
@@ -2520,6 +2840,13 @@ html_template = '''<!DOCTYPE html>
       });
       document.getElementById('btnCloseModal').addEventListener('click', () => {
         modal.classList.remove('open');
+      });
+
+      // Modal Default County Backdrop Close
+      document.getElementById('modalDefaultCounty')?.addEventListener('click', (e) => {
+        if (e.target.id === 'modalDefaultCounty') {
+          closeDefaultCountyModal();
+        }
       });
 
       document.getElementById('formAddClient').addEventListener('submit', (e) => {
