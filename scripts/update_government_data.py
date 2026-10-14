@@ -120,21 +120,26 @@ def write_step_summary(report_rows, total_before, total_after):
     md = []
     md.append("## 🤖 全台外勤巡訪地圖 - 每月政府公開資料庫同步報告")
     md.append(f"> **執行時間**：`{now_str}` (UTC+8 台灣時間)")
-    md.append(f"> **狀態**：✅ 自動同步比對完成 · 全台三大核心縣市 (桃園、苗栗、臺南) 17 大園區資料庫狀態為最新")
+    md.append(f"> **狀態**：✅ 自動同步比對完成 · 全台 18 縣市 72 大工業與科技園區資料庫狀態為最新")
     md.append("")
     md.append("| 縣市 | 工業區 / 產業科技園區 | 官方登記收錄家數 | 已標記拜訪數 | 累積拜訪歷程筆數 | 官方校驗狀態 |")
     md.append("| :--- | :--- | :---: | :---: | :---: | :---: |")
 
-    county_map = {"taoyuan": "桃園市", "miaoli": "苗栗縣", "tainan": "臺南市"}
+    county_map = {
+        "keelung": "基隆市", "taipei": "臺北市", "newtaipei": "新北市", "taoyuan": "桃園市",
+        "hsinchu_city": "新竹市", "hsinchu_county": "新竹縣", "miaoli": "苗栗縣", "taichung": "臺中市",
+        "changhua": "彰化縣", "nantou": "南投縣", "yunlin": "雲林縣", "chiayi": "嘉義縣市",
+        "tainan": "臺南市", "kaohsiung": "高雄市", "pingtung": "屏東縣",
+        "yilan": "宜蘭縣", "hualien": "花蓮縣", "taitung": "臺東縣"
+    }
     for r in report_rows:
         cname = county_map.get(r.get('county_id'), '其他')
         md.append(f"| {cname} | **{r['park_name']}** | **{r['count']} 家** | {r['visited']} 家 | {r['logs']} 筆 | ✅ 經濟部最新登記 |")
 
-    md.append(f"| **全台合計** | **17 大園區** | **{total_after} 家** | - | - | 🌟 100% 官方對齊 |")
+    md.append(f"| **全台合計** | **72 大園區** | **{total_after:,} 家** | - | - | 🌟 100% 官方對齊 |")
     md.append("")
     md.append("### 📌 本次自動巡檢重點：")
-    md.append("- 🛡️ **外勤資產保護**：既有客戶拜訪標記、備忘錄及訪談歷程 100% 完整保留。")
-    md.append("- 🏢 **全台多縣市覆蓋**：桃園(7園區/1,874家)、苗栗(4園區/520家)、臺南(6園區/1,850家) 共 4,244 家。")
+    md.append(f"- 🏢 **全台 18 縣市完整覆蓋**：涵蓋西部 15 縣市與東部 3 縣市共 72 大工業與科技園區、{total_after:,} 家廠商。")
     md.append("- 🚀 **自動編譯發布**：已自動觸發 build_index_html.py，GitHub Pages 自動即時發布更新。")
 
     summary_content = "\n".join(md)
