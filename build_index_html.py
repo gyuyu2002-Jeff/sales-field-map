@@ -491,11 +491,65 @@ html_template = '''<!DOCTYPE html>
       line-height: 1.4;
     }
 
+    /* Visit Record Summary Box inside Client Card */
+    .card-visit-box {
+      background: #F0FDF4;
+      border: 1.5px solid #BBF7D0;
+      border-radius: 7px;
+      padding: 8px 10px;
+      margin-top: 2px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .card-visit-box:hover {
+      background: #DCFCE7;
+      border-color: #86EFAC;
+    }
+
+    .card-visit-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #166534;
+    }
+
+    .badge-outcome {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #DCFCE7;
+      color: #15803D;
+      border: 1px solid #BBF7D0;
+    }
+
+    .card-visit-summary {
+      font-size: 11.5px;
+      color: #1F2937;
+      line-height: 1.35;
+      font-weight: 500;
+    }
+
+    .card-visit-next {
+      font-size: 10.5px;
+      color: #047857;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+
     .card-actions {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 6px;
       margin-top: 2px;
     }
 
@@ -529,6 +583,34 @@ html_template = '''<!DOCTYPE html>
 
     .nav-btn:hover {
       opacity: 0.9;
+    }
+
+    .btn-log {
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      background: #FFFFFF;
+      border: 1px solid #16213A;
+      color: var(--navy);
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      transition: all 0.15s;
+    }
+
+    .btn-log:hover {
+      background: #EEF3FC;
+      border-color: var(--blue);
+      color: var(--blue);
+    }
+
+    .btn-log.has-logs {
+      background: #EBF7EE;
+      border-color: #2E8540;
+      color: #2E8540;
+      font-weight: 800;
     }
 
     /* Map Styling */
@@ -613,10 +695,10 @@ html_template = '''<!DOCTYPE html>
     .modal-card {
       background: #FFFFFF;
       border-radius: 12px;
-      max-width: 520px;
+      max-width: 540px;
       width: 100%;
-      padding: 24px;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+      padding: 22px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.25);
       max-height: 90vh;
       overflow-y: auto;
     }
@@ -647,6 +729,15 @@ html_template = '''<!DOCTYPE html>
       border-radius: 6px;
       font-size: 13.5px;
       font-family: inherit;
+    }
+
+    /* Timeline History Item */
+    .timeline-card {
+      background: #FAFAF8;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      position: relative;
     }
 
     @media (max-width: 860px) {
@@ -696,7 +787,7 @@ html_template = '''<!DOCTYPE html>
     </div>
 
     <div class="header-actions">
-      <button class="btn" id="btnExport" title="匯出當前拜訪狀態為 CSV 檔">
+      <button class="btn" id="btnExport" title="匯出當前拜訪狀態為 CSV 檔（含詳細拜訪紀錄與摘要）">
         📤 匯出記錄
       </button>
       <button class="btn" id="btnImport" title="匯入客製化客戶名單 CSV">
@@ -824,7 +915,86 @@ html_template = '''<!DOCTYPE html>
 
   </div>
 
-  <!-- Modal: 新增客戶 -->
+  <!-- Modal 1: 拜訪內容紀錄 (外勤業務核心功能) -->
+  <div class="modal-overlay" id="modalVisitLog">
+    <div class="modal-card" style="max-width: 580px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; border-bottom:1.5px solid var(--border); padding-bottom:10px;">
+        <div>
+          <div style="font-size:11px; font-weight:800; color:var(--blue); text-transform:uppercase; letter-spacing:0.05em;">外勤巡訪紀錄</div>
+          <h3 id="visitModalTitle" style="margin:2px 0 0 0; font-size:17px; color:var(--navy); font-weight:900;">客戶拜訪紀錄</h3>
+          <div id="visitModalSubtitle" style="font-size:11.5px; color:var(--text-muted); margin-top:2px;"></div>
+        </div>
+        <button type="button" class="btn" id="btnCloseVisitModal" style="padding:4px 8px; font-size:14px;">✕</button>
+      </div>
+
+      <!-- Form to Add New Visit Record -->
+      <div style="background:#F9F8F5; border:1px solid #E6E3DB; border-radius:8px; padding:12px; margin-bottom:14px;">
+        <div style="font-weight:800; font-size:13px; color:var(--navy); margin-bottom:10px; display:flex; align-items:center; gap:5px;">
+          <span>📝 填寫本次拜訪內容紀錄</span>
+        </div>
+        <form id="formAddVisitLog">
+          <input type="hidden" id="visitLogClientId" />
+
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <div style="flex:1;">
+              <label style="font-size:11.5px; font-weight:700; color:var(--navy); display:block; margin-bottom:3px;">📅 拜訪日期時間 *</label>
+              <input type="datetime-local" id="logDate" required style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;" />
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:11.5px; font-weight:700; color:var(--navy); display:block; margin-bottom:3px;">👤 接洽對象 / 職稱 *</label>
+              <input type="text" id="logContact" required placeholder="例如：陳廠長、採購部林專員" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;" />
+            </div>
+          </div>
+
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <div style="flex:1;">
+              <label style="font-size:11.5px; font-weight:700; color:var(--navy); display:block; margin-bottom:3px;">🎯 洽談階段 / 進度 *</label>
+              <select id="logOutcome" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; font-weight:700;">
+                <option value="初次接洽">初次接洽 · 建立關係</option>
+                <option value="確認規格需求" selected>確認規格需求 · 評估中</option>
+                <option value="樣品測試中">樣品測試中 · 送件評估</option>
+                <option value="已提報價單">已提報價單 · 議價審核</option>
+                <option value="成交簽約">成交簽約 · 正式下單 🎉</option>
+                <option value="定期維護回訪">定期維護 · 售後關懷</option>
+                <option value="暫無需求">暫無需求 · 暫緩後續追蹤</option>
+              </select>
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:11.5px; font-weight:700; color:var(--navy); display:block; margin-bottom:3px;">⏰ 下次預計待辦 / 回訪日</label>
+              <input type="text" id="logNextAction" placeholder="例如：下週三送樣、10/25提供報價" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px;" />
+            </div>
+          </div>
+
+          <div style="margin-bottom:10px;">
+            <label style="font-size:11.5px; font-weight:700; color:var(--navy); display:block; margin-bottom:3px;">💬 洽談重點與客戶需求內容 *</label>
+            <textarea id="logSummary" rows="3" required placeholder="請詳細記錄：今天拜訪了解到的客戶痛點、目前使用的品牌/耗材、預計採購數量、關鍵決策窗口是誰、何時需提出方案..." style="width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:12.5px; font-family:inherit;"></textarea>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label style="font-size:11.5px; color:#4B5563; display:flex; align-items:center; gap:5px; cursor:pointer;">
+              <input type="checkbox" id="logAutoSetDone" checked />
+              <span>自動更新狀態為「✅ 已拜訪」</span>
+            </label>
+            <button type="submit" class="btn btn-primary" style="padding:6px 14px; font-size:12.5px;">
+              💾 儲存本次紀錄
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- History Records Section -->
+      <div>
+        <div style="font-weight:800; font-size:13px; color:var(--navy); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+          <span>📜 歷史拜訪歷程時間軸 (<span id="logHistoryCount">0</span> 筆)</span>
+        </div>
+        <div id="logHistoryList" style="max-height: 220px; overflow-y: auto; display:flex; flex-direction:column; gap:8px;">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: 新增客戶 -->
   <div class="modal-overlay" id="modalAdd">
     <div class="modal-card">
       <h3>➕ 新增拜訪客戶</h3>
@@ -916,7 +1086,7 @@ html_template = '''<!DOCTYPE html>
         baseClients = ALL_PARKS_DATA[parkId] ? ALL_PARKS_DATA[parkId].clients : [];
       }
 
-      // Check localStorage for saved visit statuses/notes
+      // Check localStorage for saved visit statuses/notes/visit_logs
       const storageKey = parkId === "zhongli" ? "sales_visit_clients_v744" : `sales_visit_clients_${parkId}`;
       const stored = localStorage.getItem(storageKey);
       if (stored) {
@@ -924,19 +1094,28 @@ html_template = '''<!DOCTYPE html>
           const storedList = JSON.parse(stored);
           const statusMap = {};
           storedList.forEach(item => {
-            statusMap[item.id] = { status: item.status, notes: item.notes };
+            statusMap[item.id] = { 
+              status: item.status, 
+              notes: item.notes,
+              visit_logs: item.visit_logs || []
+            };
           });
           clients = baseClients.map(c => {
             if (statusMap[c.id]) {
-              return { ...c, status: statusMap[c.id].status, notes: statusMap[c.id].notes };
+              return { 
+                ...c, 
+                status: statusMap[c.id].status, 
+                notes: statusMap[c.id].notes,
+                visit_logs: statusMap[c.id].visit_logs || []
+              };
             }
-            return { ...c };
+            return { ...c, visit_logs: c.visit_logs || [] };
           });
         } catch (e) {
-          clients = JSON.parse(JSON.stringify(baseClients));
+          clients = JSON.parse(JSON.stringify(baseClients)).map(c => ({ ...c, visit_logs: c.visit_logs || [] }));
         }
       } else {
-        clients = JSON.parse(JSON.stringify(baseClients));
+        clients = JSON.parse(JSON.stringify(baseClients)).map(c => ({ ...c, visit_logs: c.visit_logs || [] }));
       }
 
       // Update titles
@@ -953,7 +1132,6 @@ html_template = '''<!DOCTYPE html>
       activeIndustry = "ALL";
       activeRoad = "ALL";
       activeStatus = "ALL";
-      // keep searchQuery if user was searching
       
       setupIndustryChips();
       setupRoadChips();
@@ -1026,8 +1204,9 @@ html_template = '''<!DOCTYPE html>
         const marker = L.marker([c.lat, c.lng], { icon: customIcon }).addTo(map);
 
         const isDone = c.status === '已拜訪';
+        const logCount = (c.visit_logs && c.visit_logs.length) || 0;
         const popupContent = `
-          <div style="font-family:'Noto Sans TC',sans-serif; min-width:210px; padding:2px;">
+          <div style="font-family:'Noto Sans TC',sans-serif; min-width:220px; padding:2px;">
             <div style="font-weight:800; font-size:14px; color:#16213A; margin-bottom:3px; line-height:1.3;">
               ${c.name}
             </div>
@@ -1038,14 +1217,19 @@ html_template = '''<!DOCTYPE html>
               <span style="font-size:11px; font-weight:700; color:#1A4DA1; background:#EEF3FC; padding:2px 6px; border-radius:4px;">${c.road}</span>
               <span style="font-size:11px; color:#68717F;">${c.industry}</span>
             </div>
-            <div style="display:flex; gap:6px; align-items:center; padding-top:8px; border-top:1px dashed #E6E3DB;">
+            ${c.notes ? `<div style="font-size:11px; background:#F8FAFC; border:1px solid #E2E8F0; padding:4px 6px; border-radius:4px; margin-bottom:8px; color:#334155;">📝 <strong>備忘：</strong>${c.notes}</div>` : ''}
+            <div style="display:flex; gap:5px; align-items:center; padding-top:8px; border-top:1px dashed #E6E3DB;">
               <button onclick="quickToggleVisit(${c.id})" 
-                      style="flex:1; border:1px solid ${isDone ? '#2E8540' : '#1A4DA1'}; background:${isDone ? '#EBF7EE' : '#1A4DA1'}; color:${isDone ? '#2E8540' : '#FFFFFF'}; padding:6px 8px; border-radius:6px; font-weight:800; font-size:11.5px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
-                ${isDone ? '✅ 已拜訪 (點擊還原)' : '✓ 標記為已拜訪'}
+                      style="flex:1; border:1px solid ${isDone ? '#2E8540' : '#1A4DA1'}; background:${isDone ? '#EBF7EE' : '#1A4DA1'}; color:${isDone ? '#2E8540' : '#FFFFFF'}; padding:6px 6px; border-radius:6px; font-weight:800; font-size:11px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:2px;">
+                ${isDone ? '✅ 已拜訪' : '✓ 標記已訪'}
+              </button>
+              <button onclick="openVisitLogModal(${c.id})" 
+                      style="background:#FFFFFF; border:1px solid #16213A; color:#16213A; padding:6px 8px; border-radius:6px; font-weight:700; font-size:11px; cursor:pointer; white-space:nowrap;">
+                📋 紀錄${logCount > 0 ? ` (${logCount})` : ''}
               </button>
               <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}" 
                  target="_blank" 
-                 style="font-size:11.5px; background:#E0622B; color:#fff; text-decoration:none; padding:6px 10px; border-radius:6px; font-weight:800; white-space:nowrap;">
+                 style="font-size:11px; background:#E0622B; color:#fff; text-decoration:none; padding:6px 8px; border-radius:6px; font-weight:800; white-space:nowrap;">
                  🚗 導航
               </a>
             </div>
@@ -1075,7 +1259,8 @@ html_template = '''<!DOCTYPE html>
       currentFiltered = clients.filter(c => {
         // 1. Search Query Match
         if (keywords.length > 0) {
-          const targetStr = `${c.name || ''} ${c.address || ''} ${c.road || ''} ${c.industry || ''} ${c.contact || ''} ${c.phone || ''} ${c.notes || ''}`.toLowerCase();
+          const logTexts = (c.visit_logs || []).map(l => `${l.contact || ''} ${l.summary || ''} ${l.outcome || ''} ${l.next_action || ''}`).join(' ');
+          const targetStr = `${c.name || ''} ${c.address || ''} ${c.road || ''} ${c.industry || ''} ${c.contact || ''} ${c.phone || ''} ${c.notes || ''} ${logTexts}`.toLowerCase();
           const matchAll = keywords.every(kw => targetStr.includes(kw));
           if (!matchAll) return false;
         }
@@ -1120,13 +1305,29 @@ html_template = '''<!DOCTYPE html>
       const existingHint = document.getElementById('loadMoreHint');
       if (existingHint) existingHint.remove();
 
-      // Zero Results Handling (With Smart Assistance)
+      // Visited Summary Banner (當在「已拜訪」頁面時特別顯示)
+      if (isReset && activeStatus === "已拜訪") {
+        const totalLogs = currentFiltered.reduce((sum, c) => sum + ((c.visit_logs && c.visit_logs.length) || 0), 0);
+        const visitedBanner = document.createElement('div');
+        visitedBanner.style.cssText = "background:#ECFDF5; border:1.5px solid #A7F3D0; border-radius:8px; padding:10px 14px; margin-bottom:8px; font-size:12.5px; color:#065F46;";
+        visitedBanner.innerHTML = `
+          <div style="font-weight:900; font-size:13px; display:flex; justify-content:space-between; align-items:center;">
+            <span>✅ 已拜訪廠商清單 (${currentFiltered.length} 家)</span>
+            <span style="background:#D1FAE5; padding:2px 8px; border-radius:999px; font-size:11px;">累計拜訪紀錄：${totalLogs} 筆</span>
+          </div>
+          <div style="font-size:11.5px; color:#047857; margin-top:3px;">
+            每家卡片皆可查看「最新洽談進度」與「下次待辦事項」，點擊「📋 拜訪紀錄」可隨時追加或檢閱歷史訪談歷程！
+          </div>
+        `;
+        container.appendChild(visitedBanner);
+      }
+
+      // Zero Results Handling
       if (currentFiltered.length === 0) {
         const q = (searchQuery || "").trim();
         let noticeHtml = '';
 
         if (q) {
-          // Check if relaxed search (ignoring road/industry filter) has results
           const keywords = q.toLowerCase().split(/\\s+/).filter(Boolean);
           const relaxedMatches = clients.filter(c => {
             const str = `${c.name || ''} ${c.address || ''} ${c.road || ''} ${c.industry || ''} ${c.contact || ''} ${c.phone || ''} ${c.notes || ''}`.toLowerCase();
@@ -1144,7 +1345,6 @@ html_template = '''<!DOCTYPE html>
               </div>
             `;
           } else if (currentPark !== 'all') {
-            // Check other parks
             let otherMatches = [];
             Object.keys(ALL_PARKS_DATA).forEach(pid => {
               if (pid !== currentPark) {
@@ -1177,12 +1377,16 @@ html_template = '''<!DOCTYPE html>
           }
         }
 
-        container.innerHTML = `
+        const emptyTip = activeStatus === "已拜訪" 
+          ? "目前尚無標記為「已拜訪」的廠商。<br>在廠商卡片點擊「✓ 標記為已拜訪」或「📋 拜訪紀錄」即可開始填寫訪談進度！"
+          : "請檢查關鍵字是否有錯字，或點擊上方「重設篩選」";
+
+        container.innerHTML += `
           <div style="text-align:center; padding:30px 16px; color:#6B7280;">
             ${noticeHtml}
-            <div style="font-size:32px; margin-bottom:8px;">🔍</div>
-            <div style="font-weight:700; font-size:15px; color:var(--navy);">找不到符合條件的廠商</div>
-            <div style="font-size:12px; margin-top:4px;">請檢查關鍵字是否有錯字，或點擊上方「重設篩選」</div>
+            <div style="font-size:32px; margin-bottom:8px;">${activeStatus === "已拜訪" ? "📋" : "🔍"}</div>
+            <div style="font-weight:700; font-size:15px; color:var(--navy);">${activeStatus === "已拜訪" ? "尚無已拜訪紀錄" : "找不到符合條件的廠商"}</div>
+            <div style="font-size:12px; margin-top:4px; line-height:1.5;">${emptyTip}</div>
           </div>
         `;
         return;
@@ -1201,6 +1405,25 @@ html_template = '''<!DOCTYPE html>
         if (c.status === "已拜訪") statusClass = "status-done";
         else if (c.status === "洽談中") statusClass = "status-negotiating";
 
+        const logs = c.visit_logs || [];
+        const latestLog = logs.length > 0 ? logs[0] : null;
+
+        let visitLogBoxHtml = "";
+        if (latestLog) {
+          visitLogBoxHtml = `
+            <div class="card-visit-box" onclick="openVisitLogModal(${c.id}, event)" title="點擊檢視或新增歷史拜訪紀錄">
+              <div class="card-visit-header">
+                <span>📅 最近拜訪：${latestLog.date ? latestLog.date.replace('T', ' ') : ''} · ${latestLog.contact || '洽談'}</span>
+                <span class="badge-outcome">${latestLog.outcome || '已拜訪'}</span>
+              </div>
+              <div class="card-visit-summary">
+                💬 <strong>內容：</strong>${latestLog.summary}
+              </div>
+              ${latestLog.next_action ? `<div class="card-visit-next">⏰ <strong>下次待辦：</strong>${latestLog.next_action}</div>` : ''}
+            </div>
+          `;
+        }
+
         card.innerHTML = `
           <div class="card-top">
             <div class="card-title">${c.name}</div>
@@ -1218,9 +1441,13 @@ html_template = '''<!DOCTYPE html>
             <span class="badge-industry">${c.industry}</span>
           </div>
 
-          <div class="card-notes" title="點擊卡片可查看地圖位置">
-            📝 <strong>備忘：</strong><span id="note-text-${c.id}">${c.notes || '尚未填寫拜訪紀錄'}</span>
-          </div>
+          ${c.notes && !latestLog ? `
+            <div class="card-notes" title="點擊卡片可查看地圖位置">
+              📝 <strong>備忘：</strong><span id="note-text-${c.id}">${c.notes}</span>
+            </div>
+          ` : ''}
+
+          ${visitLogBoxHtml}
 
           <div class="card-actions">
             <div>
@@ -1231,9 +1458,9 @@ html_template = '''<!DOCTYPE html>
               </select>
             </div>
 
-            <div style="display:flex; gap:6px;">
-              <button class="btn" style="padding:4px 8px; font-size:11px;" onclick="editNotes(${c.id}, event)" title="修改備忘錄">
-                ✏️ 備忘
+            <div style="display:flex; gap:5px;">
+              <button class="btn-log ${logs.length > 0 ? 'has-logs' : ''}" onclick="openVisitLogModal(${c.id}, event)" title="開啟並填寫拜訪紀錄">
+                📋 拜訪紀錄${logs.length > 0 ? ` (${logs.length})` : ''}
               </button>
               <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}" 
                  target="_blank" 
@@ -1286,11 +1513,17 @@ html_template = '''<!DOCTYPE html>
     window.quickToggleVisit = function(id) {
       const client = clients.find(c => c.id === id);
       if (client) {
-        client.status = (client.status === '已拜訪') ? '尚未拜訪' : '已拜訪';
+        const wasDone = client.status === '已拜訪';
+        client.status = wasDone ? '尚未拜訪' : '已拜訪';
         saveCurrentParkData();
         renderList();
         if (markers[id]) {
           markers[id].openPopup();
+        }
+
+        // 若標記為已拜訪，主動引導填寫拜訪紀錄
+        if (!wasDone) {
+          openVisitLogModal(id);
         }
       }
     };
@@ -1302,21 +1535,90 @@ html_template = '''<!DOCTYPE html>
         client.status = newStatus;
         saveCurrentParkData();
         renderList();
+        if (newStatus === "已拜訪") {
+          openVisitLogModal(id);
+        }
       }
     };
 
-    window.editNotes = function(id, event) {
+    // --- Visit Log Modal Logic ---
+    window.openVisitLogModal = function(id, event) {
       if (event) event.stopPropagation();
       const client = clients.find(c => c.id === id);
       if (!client) return;
 
-      const newNote = prompt(`請輸入【${client.name}】的拜訪備忘或需求備註：`, client.notes || "");
-      if (newNote !== null) {
-        client.notes = newNote.trim();
-        saveCurrentParkData();
-        const noteSpan = document.getElementById(`note-text-${id}`);
-        if (noteSpan) noteSpan.innerText = client.notes || '尚未填寫拜訪紀錄';
+      document.getElementById('visitLogClientId').value = client.id;
+      document.getElementById('visitModalTitle').innerText = client.name;
+      document.getElementById('visitModalSubtitle').innerText = `📍 ${client.road} · ${client.address}`;
+      
+      // Default to current local date/time
+      const now = new Date();
+      const localTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      document.getElementById('logDate').value = localTime;
+      document.getElementById('logContact').value = client.contact || '';
+      document.getElementById('logSummary').value = '';
+      document.getElementById('logNextAction').value = '';
+
+      renderVisitHistoryTimeline(client);
+
+      const modal = document.getElementById('modalVisitLog');
+      modal.classList.add('open');
+    };
+
+    function renderVisitHistoryTimeline(client) {
+      const logs = client.visit_logs || [];
+      document.getElementById('logHistoryCount').innerText = logs.length;
+      const historyContainer = document.getElementById('logHistoryList');
+      historyContainer.innerHTML = "";
+
+      if (logs.length === 0) {
+        historyContainer.innerHTML = `
+          <div style="text-align:center; padding:16px; color:#9CA3AF; font-size:12px; background:#F9FAFB; border-radius:6px;">
+            尚無歷史拜訪紀錄。請在上方填寫本次洽談重點並點擊「儲存本次紀錄」！
+          </div>
+        `;
+        return;
       }
+
+      logs.forEach((item, idx) => {
+        const itemCard = document.createElement('div');
+        itemCard.className = 'timeline-card';
+        itemCard.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <div style="font-size:12px; font-weight:800; color:var(--navy);">
+              📅 ${item.date ? item.date.replace('T', ' ') : ''} · 👤 ${item.contact || '現場窗口'}
+            </div>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <span class="badge-outcome">${item.outcome || '洽談紀錄'}</span>
+              <button onclick="deleteVisitLog(${client.id}, '${item.id}')" style="background:none; border:none; color:#EF4444; font-size:11px; cursor:pointer;" title="刪除此筆紀錄">🗑️</button>
+            </div>
+          </div>
+          <div style="font-size:12px; color:#374151; line-height:1.4; white-space:pre-wrap; margin-bottom:4px;">
+            ${item.summary}
+          </div>
+          ${item.next_action ? `
+            <div style="font-size:11px; color:#059669; font-weight:700;">
+              ⏰ 下次待辦：${item.next_action}
+            </div>
+          ` : ''}
+        `;
+        historyContainer.appendChild(itemCard);
+      });
+    }
+
+    window.deleteVisitLog = function(clientId, logId) {
+      const client = clients.find(c => c.id === clientId);
+      if (!client || !confirm("確定要刪除這筆拜訪紀錄嗎？")) return;
+
+      client.visit_logs = (client.visit_logs || []).filter(l => String(l.id) !== String(logId));
+      if (client.visit_logs.length > 0) {
+        client.notes = client.visit_logs[0].summary;
+      } else {
+        client.notes = "";
+      }
+      saveCurrentParkData();
+      renderVisitHistoryTimeline(client);
+      renderList();
     };
 
     function updateBadgeCounts() {
@@ -1553,6 +1855,46 @@ html_template = '''<!DOCTYPE html>
         renderList();
       });
 
+      // Form Add Visit Log Submission
+      document.getElementById('formAddVisitLog').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const clientId = parseInt(document.getElementById('visitLogClientId').value, 10);
+        const client = clients.find(c => c.id === clientId);
+        if (!client) return;
+
+        const newLog = {
+          id: 'v_' + Date.now(),
+          date: document.getElementById('logDate').value,
+          contact: document.getElementById('logContact').value.trim(),
+          outcome: document.getElementById('logOutcome').value,
+          next_action: document.getElementById('logNextAction').value.trim(),
+          summary: document.getElementById('logSummary').value.trim(),
+          created_at: Date.now()
+        };
+
+        if (!client.visit_logs) client.visit_logs = [];
+        client.visit_logs.unshift(newLog);
+
+        // Update latest notes summary
+        client.notes = newLog.summary;
+
+        if (document.getElementById('logAutoSetDone').checked) {
+          client.status = "已拜訪";
+        }
+
+        saveCurrentParkData();
+        renderVisitHistoryTimeline(client);
+        renderList();
+
+        document.getElementById('logSummary').value = '';
+        document.getElementById('logNextAction').value = '';
+        alert("✅ 拜訪紀錄已成功儲存！");
+      });
+
+      document.getElementById('btnCloseVisitModal').addEventListener('click', () => {
+        document.getElementById('modalVisitLog').classList.remove('open');
+      });
+
       // Locate User GPS (外勤業務神功能)
       document.getElementById('btnLocateMe').addEventListener('click', () => {
         if (!navigator.geolocation) {
@@ -1600,10 +1942,12 @@ html_template = '''<!DOCTYPE html>
         }
       });
 
-      // Export CSV
+      // Export CSV (包含外勤拜訪紀錄與下次待辦)
       document.getElementById('btnExport').addEventListener('click', () => {
-        let csvContent = "\\uFEFFid,name,road,address,lat,lng,industry,is_listed,status,contact,phone,notes\\n";
+        let csvContent = "\\uFEFFid,name,road,address,lat,lng,industry,is_listed,status,contact,phone,notes,visit_count,latest_visit_date,latest_visit_contact,latest_visit_outcome,latest_visit_summary,latest_visit_next\\n";
         clients.forEach(c => {
+          const logs = c.visit_logs || [];
+          const latest = logs.length > 0 ? logs[0] : {};
           const row = [
             c.id,
             `"${(c.name || '').replace(/"/g, '""')}"`,
@@ -1616,7 +1960,13 @@ html_template = '''<!DOCTYPE html>
             `"${(c.status || '尚未拜訪')}"`,
             `"${(c.contact || '').replace(/"/g, '""')}"`,
             `"${(c.phone || '').replace(/"/g, '""')}"`,
-            `"${(c.notes || '').replace(/"/g, '""')}"`
+            `"${(c.notes || '').replace(/"/g, '""')}"`,
+            logs.length,
+            `"${(latest.date || '').replace('T', ' ')}"`,
+            `"${(latest.contact || '').replace(/"/g, '""')}"`,
+            `"${(latest.outcome || '').replace(/"/g, '""')}"`,
+            `"${(latest.summary || '').replace(/"/g, '""')}"`,
+            `"${(latest.next_action || '').replace(/"/g, '""')}"`
           ].join(",");
           csvContent += row + "\\n";
         });
@@ -1626,7 +1976,7 @@ html_template = '''<!DOCTYPE html>
         const a = document.createElement("a");
         a.href = url;
         const parkName = currentPark === 'all' ? '全桃7大園區' : (ALL_PARKS_DATA[currentPark] ? ALL_PARKS_DATA[currentPark].name : '園區');
-        a.download = `${parkName}_業務拜訪記錄_${new Date().toISOString().slice(0,10)}.csv`;
+        a.download = `${parkName}_業務拜訪與洽談紀錄_${new Date().toISOString().slice(0,10)}.csv`;
         a.click();
         URL.revokeObjectURL(url);
       });
@@ -1673,7 +2023,8 @@ html_template = '''<!DOCTYPE html>
           status: "尚未拜訪",
           contact: document.getElementById('addContact').value.trim(),
           phone: document.getElementById('addPhone').value.trim(),
-          notes: document.getElementById('addNotes').value.trim()
+          notes: document.getElementById('addNotes').value.trim(),
+          visit_logs: []
         };
 
         clients.unshift(newClient);
@@ -1713,7 +2064,8 @@ html_template = '''<!DOCTYPE html>
           status: row[8] || "尚未拜訪",
           contact: row[9] || "",
           phone: row[10] || "",
-          notes: row[11] || ""
+          notes: row[11] || "",
+          visit_logs: []
         });
       }
 
