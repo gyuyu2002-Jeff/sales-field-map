@@ -64,10 +64,23 @@ html_template = '''<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>全台科技＆產業園區地圖</title>
+  <title>全台科技＆產業園區地圖 · 外勤巡訪指南</title>
   <meta name="application-name" content="全台科技＆產業園區地圖">
   <meta name="apple-mobile-web-app-title" content="全台科技＆產業園區地圖">
   <meta name="theme-color" content="#16213A">
+
+  <!-- SEO & Social Share Preview (LINE / FB 連結中文預覽摘要卡片) -->
+  <meta name="description" content="全台科技＆產業園區地圖 · 外勤巡訪指南。收錄科學園區與工業區廠房名冊，支援同路巡訪快篩、一鍵 Google 導航、外勤拜訪進度與 CSV 匯出。">
+  <meta property="og:title" content="全台科技＆產業園區地圖 · 外勤巡訪指南">
+  <meta property="og:description" content="全台科學園區與工業區廠房名冊，支援同路巡訪快篩、一鍵 Google 導航、外勤拜訪進度與 CSV 匯出。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://gyuyu2002-jeff.github.io/sales-field-map/">
+  <meta property="og:image" content="https://gyuyu2002-jeff.github.io/sales-field-map/apple-touch-icon.png">
+  <meta property="og:site_name" content="全台科技＆產業園區地圖">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="全台科技＆產業園區地圖 · 外勤巡訪指南">
+  <meta name="twitter:description" content="全台科學園區與工業區廠房名冊，支援同路巡訪快篩、一鍵 Google 導航、外勤拜訪進度與 CSV 匯出。">
+  <meta name="twitter:image" content="https://gyuyu2002-jeff.github.io/sales-field-map/apple-touch-icon.png">
 
   <!-- Favicon & Bookmarks Icons (我的最愛與分頁專屬高清小圖示 - 內嵌 Data URI 保證離線與書籤即時抓取) -->
   <link rel="shortcut icon" type="image/png" href="__B64_32_URI__">
