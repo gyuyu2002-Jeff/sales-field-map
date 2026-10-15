@@ -771,6 +771,113 @@
     .marker-done { background: var(--accent-green); }
     .marker-negotiating { background: var(--accent-purple); }
 
+    /* 自訂地圖放大自動顯現廠家名稱標籤 (Auto POI Labels on Zoom) */
+    .leaflet-tooltip.marker-auto-tooltip {
+      display: none !important;
+      opacity: 0 !important;
+      background: #FFFFFF;
+      color: #16213A;
+      border: 1.5px solid #CBD5E1;
+      border-radius: 6px;
+      padding: 3px 8px;
+      box-shadow: 0 4px 12px rgba(22, 33, 58, 0.16);
+      font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+      pointer-events: auto;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      user-select: none;
+      z-index: 600;
+    }
+
+    .leaflet-tooltip.marker-auto-tooltip:hover {
+      border-color: #1A4DA1;
+      box-shadow: 0 6px 16px rgba(26, 77, 161, 0.25);
+      z-index: 9999 !important;
+    }
+
+    .leaflet-tooltip-top.marker-auto-tooltip:before {
+      border-top-color: #CBD5E1;
+    }
+
+    /* 當地圖放大到街道級別 (Zoom >= 16) 時自動展現標籤 */
+    #map.show-auto-labels .leaflet-tooltip.marker-auto-tooltip {
+      display: flex !important;
+      flex-direction: column;
+      opacity: 1 !important;
+    }
+
+    /* 狀態邊框顏色標示 */
+    .marker-auto-tooltip.status-done {
+      border-color: #2E8540;
+      border-left: 4px solid #2E8540;
+    }
+    .marker-auto-tooltip.status-negotiating {
+      border-color: #B45309;
+      border-left: 4px solid #B45309;
+    }
+    .marker-auto-tooltip.status-listed {
+      border-color: #D97706;
+    }
+
+    /* 標籤內文字排版 */
+    .marker-auto-tooltip .lbl-title {
+      font-weight: 800;
+      font-size: 11.5px;
+      color: #16213A;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      line-height: 1.25;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .marker-auto-tooltip .lbl-star {
+      font-size: 9.5px;
+      background: #FEF3C7;
+      color: #92400E;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: 800;
+    }
+
+    .marker-auto-tooltip .lbl-badge-done {
+      font-size: 9px;
+      background: #EBF7EE;
+      color: #2E8540;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: 800;
+    }
+
+    .marker-auto-tooltip .lbl-badge-neg {
+      font-size: 9px;
+      background: #FEF3C7;
+      color: #B45309;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: 800;
+    }
+
+    /* 超近距離 (Zoom >= 17.5) 顯示路段與產業類別 */
+    .marker-auto-tooltip .lbl-detail {
+      display: none;
+      font-size: 10px;
+      color: #64748B;
+      margin-top: 2px;
+      border-top: 1px dashed #E2E8F0;
+      padding-top: 2px;
+      align-items: center;
+      gap: 4px;
+    }
+
+    #map.show-detailed-labels .marker-auto-tooltip .lbl-detail {
+      display: flex !important;
+    }
+
     /* Map overlay controls */
     .map-controls-panel {
       position: absolute;
@@ -795,11 +902,20 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      transition: all 0.15s ease;
     }
 
     .map-tool-btn:hover {
       background: #FAFAF7;
       border-color: var(--navy);
+    }
+
+    .map-tool-btn.active-state {
+      background: #EEF3FC;
+      border-color: var(--blue);
+      color: var(--blue);
+      font-weight: 800;
+      box-shadow: 0 4px 14px rgba(26, 77, 161, 0.18);
     }
 
     /* Modal Styling */
@@ -1374,6 +1490,9 @@
 
     <!-- Map Floating Tools -->
     <div class="map-controls-panel">
+      <button class="map-tool-btn active-state" id="btnToggleLabels" onclick="toggleAutoLabels()" title="切換地圖放大時是否自動顯現廠商名稱標籤">
+        🏷️ 廠名: 自動
+      </button>
       <button class="map-tool-btn" id="btnLocateMe" title="取得您手機或設備目前的 GPS 位置">
         🎯 我的位置
       </button>
@@ -1430,15 +1549,12 @@
 
           <div style="display:flex; gap:8px; margin-bottom:8px;">
             <div style="flex:1;">
-              <label style="font-size:11.5px; font-weight:700; color:var(--navy); display:block; margin-bottom:3px;">🎯 洽談階段 / 進度 *</label>
-              <select id="logOutcome" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; font-weight:700;">
-                <option value="初次接洽">初次接洽 · 建立關係</option>
-                <option value="確認規格需求" selected>確認規格需求 · 評估中</option>
-                <option value="樣品測試中">樣品測試中 · 送件評估</option>
-                <option value="已提報價單">已提報價單 · 議價審核</option>
-                <option value="成交簽約">成交簽約 · 正式下單 🎉</option>
-                <option value="定期維護回訪">定期維護 · 售後關懷</option>
-                <option value="暫無需求">暫無需求 · 暫緩後續追蹤</option>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                <label style="font-size:11.5px; font-weight:700; color:var(--navy); margin:0;">🎯 洽談階段 / 進度 *</label>
+                <button type="button" onclick="openStageManagerModal()" style="background:none; border:none; color:var(--blue); font-size:11px; font-weight:800; cursor:pointer; padding:0; text-decoration:underline;" title="自訂階段名稱並設為永久常駐">⚙️ 自訂常駐</button>
+              </div>
+              <select id="logOutcome" onchange="handleOutcomeSelectChange(this)" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:12px; font-weight:700;">
+                <!-- Populated dynamically by populateStageOptions() -->
               </select>
             </div>
             <div style="flex:1;">
@@ -1584,6 +1700,47 @@
     </div>
   </div>
 
+  <!-- Modal 4: 洽談階段自訂管理（常駐選項） -->
+  <div class="modal-overlay" id="modalStageManager" style="z-index: 2200;">
+    <div class="modal-card" style="max-width: 440px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1.5px solid var(--border); padding-bottom:10px;">
+        <div>
+          <div style="font-size:11px; font-weight:800; color:var(--blue); text-transform:uppercase; letter-spacing:0.05em;">外勤流程設定</div>
+          <h3 style="margin:2px 0 0 0; font-size:16px; color:var(--navy); font-weight:900;">🎯 自訂洽談階段（常駐選項）</h3>
+        </div>
+        <button type="button" class="btn" onclick="closeStageManagerModal()" style="padding:4px 8px; font-size:14px;">✕</button>
+      </div>
+
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
+        自訂符合您公司業務銷售流程的洽談階段，新增後將<strong>永久常駐於拜訪紀錄選單</strong>中，全台 18 縣市 72 大園區皆可即選即用。
+      </div>
+
+      <!-- Add New Custom Stage Form -->
+      <div style="display:flex; gap:6px; margin-bottom:14px;">
+        <input type="text" id="newStageInput" placeholder="輸入自訂階段名稱（例如：送樣測試中）" style="flex:1; padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:12.5px;" onkeydown="if(event.key==='Enter'){event.preventDefault();addNewCustomStage();}" />
+        <button type="button" class="btn btn-primary" onclick="addNewCustomStage()" style="padding:7px 14px; font-size:12px; white-space:nowrap; font-weight:800;">
+          ➕ 加入常駐
+        </button>
+      </div>
+
+      <!-- List of Currently Active Stages -->
+      <div style="font-weight:800; font-size:12px; color:var(--navy); margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+        <span>現有常駐階段清單</span>
+        <button type="button" onclick="resetDefaultStages()" style="background:none; border:none; color:var(--text-muted); font-size:11px; cursor:pointer; text-decoration:underline;">恢復系統預設</button>
+      </div>
+
+      <div id="stageListContainer" style="max-height: 220px; overflow-y: auto; display:flex; flex-direction:column; gap:6px; margin-bottom:16px; border:1px solid var(--border); border-radius:6px; padding:8px; background:#FAFAF8;">
+        <!-- Dynamically rendered stages -->
+      </div>
+
+      <div style="display:flex; justify-content:flex-end;">
+        <button type="button" class="btn btn-primary" onclick="closeStageManagerModal()" style="padding:7px 16px; font-size:12.5px; font-weight:800;">
+          ✓ 完成並儲存
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast Notification Element -->
   <div class="toast-notice" id="toastNotice"></div>
 
@@ -1623,6 +1780,167 @@
     let searchDebounceTimer = null;
     let markerDebounceTimer = null;
     let currentMobileView = "split"; // "list", "split", "map"
+
+    // --- 洽談階段 / 進度 自訂常駐管理 (Sales Stage Manager CRM) ---
+    const DEFAULT_STAGES = [
+      "初次接洽 · 建立關係",
+      "確認規格需求 · 評估中",
+      "樣品測試中 · 送件評估",
+      "已提報價單 · 議價審核",
+      "成交簽約 · 正式下單 🎉",
+      "定期維護 · 售後關懷",
+      "暫無需求 · 暫緩後續追蹤"
+    ];
+
+    const STAGE_STORAGE_KEY = "sales_custom_stages_v2";
+    let customStagesList = [];
+    let previousSelectedOutcome = "確認規格需求 · 評估中";
+
+    function loadCustomStages() {
+      try {
+        const saved = localStorage.getItem(STAGE_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            customStagesList = parsed;
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load custom stages", e);
+      }
+      customStagesList = [...DEFAULT_STAGES];
+    }
+
+    function saveCustomStages() {
+      try {
+        localStorage.setItem(STAGE_STORAGE_KEY, JSON.stringify(customStagesList));
+      } catch (e) {
+        console.error("Failed to save custom stages", e);
+      }
+      populateStageOptions();
+    }
+
+    function populateStageOptions(selectTargetStage) {
+      const select = document.getElementById('logOutcome');
+      if (!select) return;
+
+      const currentVal = selectTargetStage || select.value || previousSelectedOutcome;
+      select.innerHTML = '';
+
+      customStagesList.forEach(st => {
+        const opt = document.createElement('option');
+        opt.value = st;
+        opt.textContent = st;
+        if (st === currentVal) opt.selected = true;
+        select.appendChild(opt);
+      });
+
+      // Add Manage Option at the bottom
+      const manageOpt = document.createElement('option');
+      manageOpt.value = '__MANAGE_STAGES__';
+      manageOpt.textContent = '⚙️ ＋ 自訂/新增常駐階段...';
+      manageOpt.style.fontWeight = 'bold';
+      manageOpt.style.color = '#1A4DA1';
+      select.appendChild(manageOpt);
+
+      if (!select.value && select.options.length > 0) {
+        select.selectedIndex = 0;
+      }
+      previousSelectedOutcome = select.value;
+    }
+
+    window.openStageManagerModal = function() {
+      renderStageList();
+      const modal = document.getElementById('modalStageManager');
+      if (modal) modal.classList.add('open');
+      const input = document.getElementById('newStageInput');
+      if (input) {
+        input.value = '';
+        setTimeout(() => input.focus(), 150);
+      }
+    };
+
+    window.closeStageManagerModal = function() {
+      const modal = document.getElementById('modalStageManager');
+      if (modal) modal.classList.remove('open');
+      populateStageOptions();
+    };
+
+    function renderStageList() {
+      const container = document.getElementById('stageListContainer');
+      if (!container) return;
+      container.innerHTML = '';
+
+      if (customStagesList.length === 0) {
+        container.innerHTML = '<div style="font-size:12px; color:var(--text-muted); text-align:center; padding:12px;">目前無任何自訂階段</div>';
+        return;
+      }
+
+      customStagesList.forEach((st, idx) => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#FFFFFF; border:1px solid #E2E8F0; padding:6px 10px; border-radius:6px; font-size:12px;';
+        row.innerHTML = `
+          <div style="font-weight:700; color:var(--navy); display:flex; align-items:center; gap:6px;">
+            <span style="color:var(--blue); font-size:11px;">#${idx + 1}</span>
+            <span>${st}</span>
+          </div>
+          <button type="button" onclick="deleteCustomStage(${idx})" title="刪除此階段" style="background:none; border:none; color:#EF4444; font-size:13px; cursor:pointer; padding:2px 5px; border-radius:4px;">
+            🗑️
+          </button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    window.addNewCustomStage = function() {
+      const input = document.getElementById('newStageInput');
+      if (!input) return;
+      const val = input.value.trim();
+      if (!val) {
+        alert("請輸入階段名稱！");
+        return;
+      }
+      if (customStagesList.includes(val)) {
+        alert("此階段名稱已存在！");
+        return;
+      }
+      customStagesList.push(val);
+      saveCustomStages();
+      renderStageList();
+      input.value = '';
+      populateStageOptions(val);
+    };
+
+    window.deleteCustomStage = function(idx) {
+      if (customStagesList.length <= 1) {
+        alert("請至少保留一個洽談階段！");
+        return;
+      }
+      const item = customStagesList[idx];
+      if (confirm(`確定要移除「${item}」常駐階段嗎？`)) {
+        customStagesList.splice(idx, 1);
+        saveCustomStages();
+        renderStageList();
+      }
+    };
+
+    window.resetDefaultStages = function() {
+      if (confirm("確定要恢復原廠預設的洽談階段選項嗎？")) {
+        customStagesList = [...DEFAULT_STAGES];
+        saveCustomStages();
+        renderStageList();
+      }
+    };
+
+    window.handleOutcomeSelectChange = function(selectEl) {
+      if (selectEl.value === '__MANAGE_STAGES__') {
+        openStageManagerModal();
+        selectEl.value = previousSelectedOutcome || (customStagesList[0] || '初次接洽');
+      } else {
+        previousSelectedOutcome = selectEl.value;
+      }
+    };
 
     // --- RWD Mobile Filter Chips Collapsible ---
     window.toggleMobileFilters = function() {
@@ -2054,6 +2372,37 @@
       renderList();
     }
 
+    // --- 地圖放大自動顯現廠家名稱標籤 (Auto POI Labels on Zoom) ---
+    let autoLabelsEnabled = true;
+
+    window.updateMapLabelVisibility = function() {
+      if (!map) return;
+      const currentZoom = map.getZoom();
+      const mapEl = document.getElementById('map');
+      if (!mapEl) return;
+      if (autoLabelsEnabled) {
+        mapEl.classList.toggle('show-auto-labels', currentZoom >= 16);
+        mapEl.classList.toggle('show-detailed-labels', currentZoom >= 17.5);
+      } else {
+        mapEl.classList.remove('show-auto-labels', 'show-detailed-labels');
+      }
+    };
+
+    window.toggleAutoLabels = function() {
+      autoLabelsEnabled = !autoLabelsEnabled;
+      const btn = document.getElementById('btnToggleLabels');
+      if (btn) {
+        if (autoLabelsEnabled) {
+          btn.innerHTML = '🏷️ 廠名: 自動';
+          btn.classList.add('active-state');
+        } else {
+          btn.innerHTML = '🏷️ 廠名: 關閉';
+          btn.classList.remove('active-state');
+        }
+      }
+      updateMapLabelVisibility();
+    };
+
     // --- Initialize Leaflet Map ---
     function initMap() {
       map = L.map('map', {
@@ -2068,6 +2417,10 @@
       L.control.attribution({ position: 'bottomright' })
         .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>')
         .addTo(map);
+
+      map.on('zoomend', updateMapLabelVisibility);
+      map.on('zoom', updateMapLabelVisibility);
+      map.on('moveend', updateMapLabelVisibility);
     }
 
     // --- Debounced Marker Rendering for 60fps Performance ---
@@ -2105,6 +2458,50 @@
         const isDone = c.status === '已拜訪';
         const logCount = (c.visit_logs && c.visit_logs.length) || 0;
         const parkName = (c.park_id && PARKS[c.park_id]) ? PARKS[c.park_id].name : '';
+
+        // 廠家自動標籤（地圖放大至街道級別時自動顯現，免點選直接閱讀廠商名稱與重點資訊）
+        let statusBadge = '';
+        let statusTooltipClass = '';
+        if (c.status === '已拜訪') {
+          statusBadge = '<span class="lbl-badge-done">✅已訪</span>';
+          statusTooltipClass = 'status-done';
+        } else if (c.status === '洽談中') {
+          statusBadge = '<span class="lbl-badge-neg">💬洽談</span>';
+          statusTooltipClass = 'status-negotiating';
+        } else if (c.is_listed === '是') {
+          statusTooltipClass = 'status-listed';
+        }
+
+        const tooltipContent = `
+          <div class="lbl-title">
+            <span>${c.name}</span>
+            ${c.is_listed === '是' ? '<span class="lbl-star">⭐上市</span>' : ''}
+            ${statusBadge}
+          </div>
+          <div class="lbl-detail">
+            <span>📍 ${c.road}</span>
+            <span>·</span>
+            <span>${c.industry}</span>
+          </div>
+        `;
+
+        marker.bindTooltip(tooltipContent, {
+          permanent: true,
+          direction: 'top',
+          offset: [0, -14],
+          className: `marker-auto-tooltip ${statusTooltipClass}`,
+          interactive: true
+        });
+
+        marker.on('tooltipopen', (e) => {
+          if (e.tooltip && e.tooltip._container) {
+            e.tooltip._container.onclick = (ev) => {
+              ev.stopPropagation();
+              marker.openPopup();
+              highlightClientCard(c.id);
+            };
+          }
+        });
 
         const popupContent = `
           <div style="font-family:'Noto Sans TC',sans-serif; min-width:230px; padding:2px;">
@@ -2151,6 +2548,9 @@
       if (filteredClients.length > 0 && bounds.isValid() && filteredClients.length <= 150) {
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
       }
+
+      // 每次更新標記後同步刷新標籤可視性
+      updateMapLabelVisibility();
     }
 
     // --- Search & Multi-Dimensional Filtering Logic (嚴格局限於當前所選園區/縣市) ---
@@ -2439,6 +2839,7 @@
       document.getElementById('logSummary').value = '';
       document.getElementById('logNextAction').value = '';
 
+      populateStageOptions();
       renderVisitHistoryTimeline(client);
 
       const modal = document.getElementById('modalVisitLog');
@@ -2603,6 +3004,8 @@
     // --- Event Listeners Initialization ---
     document.addEventListener("DOMContentLoaded", () => {
       initMap();
+      loadCustomStages();
+      populateStageOptions();
 
       // 檢查是否已設定預設常駐縣市
       const savedDefault = localStorage.getItem(DEFAULT_COUNTY_KEY);
@@ -2899,10 +3302,20 @@
         modal.classList.remove('open');
       });
 
-      // Modal Default County Backdrop Close
+      // Modal Backdrop Click Closes
       document.getElementById('modalDefaultCounty')?.addEventListener('click', (e) => {
         if (e.target.id === 'modalDefaultCounty') {
           closeDefaultCountyModal();
+        }
+      });
+      document.getElementById('modalStageManager')?.addEventListener('click', (e) => {
+        if (e.target.id === 'modalStageManager') {
+          closeStageManagerModal();
+        }
+      });
+      document.getElementById('modalVisitLog')?.addEventListener('click', (e) => {
+        if (e.target.id === 'modalVisitLog') {
+          document.getElementById('modalVisitLog').classList.remove('open');
         }
       });
 
