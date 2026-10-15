@@ -51,7 +51,17 @@ html_template = '''<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>全台外勤巡訪地圖總中樞 - 18 縣市 72 大工業與科技園區巡訪指南</title>
+  <title>全台科技＆產業園區地圖</title>
+  <meta name="application-name" content="全台科技＆產業園區地圖">
+  <meta name="apple-mobile-web-app-title" content="全台科技＆產業園區地圖">
+  <meta name="theme-color" content="#16213A">
+
+  <!-- Favicon & Bookmarks Icons (我的最愛與分頁圖示) -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="shortcut icon" href="favicon.ico">
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -367,6 +377,16 @@ html_template = '''<!DOCTYPE html>
       padding: 12px 16px;
       background: #FFFFFF;
       border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .mobile-filter-collapse-btn {
+      display: none;
+    }
+
+    .collapsible-filters {
       display: flex;
       flex-direction: column;
       gap: 9px;
@@ -1090,67 +1110,88 @@ html_template = '''<!DOCTYPE html>
         font-size: 11px;
       }
 
-      /* Container 適配手機動態可視高度 */
+      /* Container 適配手機彈性高度，停在底欄上方，絕不溢出或被遮蓋 */
       .app-container {
-        height: calc(100vh - 122px);
-        height: calc(100dvh - 122px);
+        flex: 1;
+        min-height: 0;
+        height: auto;
         position: relative;
+        overflow: hidden;
       }
 
-      /* 手機專屬底部浮動模式切換列 (Floating View Toggle) */
+      /* 手機專屬底部常駐模式切換導航列 (Docked Bottom Navigation Bar) - 獨立空間，絕不遮擋卡片 */
       .mobile-view-toggle {
         display: flex;
-        position: fixed;
-        bottom: 14px;
-        bottom: calc(14px + env(safe-area-inset-bottom));
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 1500;
-        background: rgba(22, 33, 58, 0.94);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        padding: 4px;
-        border-radius: 999px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        gap: 3px;
+        flex-shrink: 0;
+        position: relative;
+        bottom: auto;
+        left: auto;
+        transform: none;
+        width: 100%;
+        border-radius: 0;
+        background: #16213A;
+        background: rgba(22, 33, 58, 0.98);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        padding: 6px 12px;
+        padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+        border: none;
+        border-top: 1.5px solid rgba(255, 255, 255, 0.15);
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.25);
+        gap: 6px;
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+        box-sizing: border-box;
       }
 
       .view-btn {
-        background: transparent;
-        border: none;
+        flex: 1;
+        max-width: 160px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.14);
         color: #D1D5DB;
-        padding: 7px 15px;
-        border-radius: 999px;
+        padding: 8px 10px;
+        border-radius: 8px;
         font-size: 12px;
         font-weight: 800;
         cursor: pointer;
         transition: all 0.15s ease;
         white-space: nowrap;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
       }
 
       .view-btn.active {
         background: #FFFFFF;
         color: #16213A;
+        border-color: #FFFFFF;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
       }
 
-      /* 手機視圖模式 1: 分割模式 (預設上下分割) */
+      /* 手機視圖模式 1: 分割模式 (地圖 36%，名單 64%，視野更寬廣) */
       .app-container.mobile-split {
         flex-direction: column;
       }
       .app-container.mobile-split #map {
         display: block;
-        height: 44%;
+        height: 36%;
         order: 1;
+        flex-shrink: 0;
       }
       .app-container.mobile-split .sidebar {
         display: flex;
+        flex-direction: column;
         width: 100%;
-        height: 56%;
+        height: 64%;
+        min-height: 0;
         order: 2;
         border-right: none;
         border-top: 2px solid var(--border);
+        overflow: hidden;
       }
 
       /* 手機視圖模式 2: 名單全螢幕模式 */
@@ -1159,9 +1200,12 @@ html_template = '''<!DOCTYPE html>
       }
       .app-container.mobile-list .sidebar {
         display: flex !important;
+        flex-direction: column !important;
         width: 100% !important;
         height: 100% !important;
+        min-height: 0 !important;
         border-right: none;
+        overflow: hidden;
       }
 
       /* 手機視圖模式 3: 地圖全螢幕模式 */
@@ -1174,9 +1218,51 @@ html_template = '''<!DOCTYPE html>
         height: 100% !important;
       }
 
-      /* 預留底部安全高度，避免卡片被底部切換按鈕遮擋 */
+      /* 側邊篩選列在手機端緊湊化 */
+      .sidebar-controls {
+        padding: 8px 10px;
+        gap: 6px;
+      }
+
+      .mobile-filter-collapse-btn {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        background: #F4F2EC;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 5px 10px;
+        font-size: 11.5px;
+        font-weight: 700;
+        color: var(--navy);
+        cursor: pointer;
+        margin-top: 1px;
+        transition: all 0.15s ease;
+      }
+
+      .mobile-filter-collapse-btn:hover {
+        background: #EAE6DC;
+      }
+
+      .collapsible-filters {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .collapsible-filters.collapsed {
+        display: none !important;
+      }
+
+      /* 卡片清單底部留有足夠內距，最後一張卡片完整可見 */
       .client-list {
-        padding-bottom: 75px;
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 10px;
+        padding-bottom: 24px;
+        -webkit-overflow-scrolling: touch;
       }
 
       /* 手機彈窗抽屜化 (Bottom-Sheet Modal) */
@@ -1226,8 +1312,8 @@ html_template = '''<!DOCTYPE html>
     <div class="brand">
       <div class="brand-logo">🗺️</div>
       <div>
-        <div class="brand-title" id="headerTitle">全台外勤巡訪地圖總中樞</div>
-        <div class="brand-subtitle" id="headerSubtitle">18 縣市 72 大工業與科技園區 · 13,424 家廠商巡訪指南</div>
+        <div class="brand-title" id="headerTitle">全台科技＆產業園區地圖</div>
+        <div class="brand-subtitle" id="headerSubtitle">18 縣市 72 大工業與科技園區 · 13,424 家廠商動線指南</div>
       </div>
     </div>
 
@@ -1275,37 +1361,45 @@ html_template = '''<!DOCTYPE html>
           <button id="btnDoSearch" class="btn btn-primary" style="padding: 7px 12px;">搜尋</button>
         </div>
 
-        <!-- Filter 1: By Industry (產業別快篩) -->
-        <div class="chips-group">
-          <div class="chips-label">
-            <span>🏭 產業類別快篩</span>
-            <span id="indCurrentLabel" style="font-size:10.5px; color:var(--blue);">全部產業</span>
-          </div>
-          <div class="chips-scroll" id="industryChips">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
+        <!-- Mobile Filter Collapse Toggle Button -->
+        <button type="button" class="mobile-filter-collapse-btn" id="btnToggleFilters" onclick="toggleMobileFilters()">
+          <span>⚡ 快捷標籤（產業 / 同路 / 狀態）</span>
+          <span id="filtersToggleText">▲ 收合篩選</span>
+        </button>
 
-        <!-- Filter 2: By Road (同路巡訪快篩) -->
-        <div class="chips-group">
-          <div class="chips-label">
-            <span>📍 同路巡訪快篩（同一條路順路拜訪）</span>
-            <span id="roadCurrentLabel" style="font-size:10.5px; color:var(--blue);">全部路段</span>
+        <div id="collapsibleFilterSection" class="collapsible-filters">
+          <!-- Filter 1: By Industry (產業別快篩) -->
+          <div class="chips-group">
+            <div class="chips-label">
+              <span>🏭 產業類別快篩</span>
+              <span id="indCurrentLabel" style="font-size:10.5px; color:var(--blue);">全部產業</span>
+            </div>
+            <div class="chips-scroll" id="industryChips">
+              <!-- Dynamically populated -->
+            </div>
           </div>
-          <div class="chips-scroll" id="roadChips">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
 
-        <!-- Filter 3: By Visit Status & Tier -->
-        <div class="chips-group">
-          <div class="chips-label">🎯 狀態與等級</div>
-          <div class="status-chips-scroll" id="statusChips">
-            <button class="chip chip-status active-all" data-status="ALL">全部 (<span id="countAll">0</span>)</button>
-            <button class="chip chip-status" data-status="LISTED">⭐ 上市櫃 (<span id="countListed">0</span>)</button>
-            <button class="chip chip-status" data-status="尚未拜訪">⏳ 尚未拜訪 (<span id="countPending">0</span>)</button>
-            <button class="chip chip-status" data-status="洽談中">💬 洽談中 (<span id="countNegotiating">0</span>)</button>
-            <button class="chip chip-status" data-status="已拜訪">✅ 已拜訪 (<span id="countDone">0</span>)</button>
+          <!-- Filter 2: By Road (同路巡訪快篩) -->
+          <div class="chips-group">
+            <div class="chips-label">
+              <span>📍 同路巡訪快篩（同一條路順路拜訪）</span>
+              <span id="roadCurrentLabel" style="font-size:10.5px; color:var(--blue);">全部路段</span>
+            </div>
+            <div class="chips-scroll" id="roadChips">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Filter 3: By Visit Status & Tier -->
+          <div class="chips-group">
+            <div class="chips-label">🎯 狀態與等級</div>
+            <div class="status-chips-scroll" id="statusChips">
+              <button class="chip chip-status active-all" data-status="ALL">全部 (<span id="countAll">0</span>)</button>
+              <button class="chip chip-status" data-status="LISTED">⭐ 上市櫃 (<span id="countListed">0</span>)</button>
+              <button class="chip chip-status" data-status="尚未拜訪">⏳ 尚未拜訪 (<span id="countPending">0</span>)</button>
+              <button class="chip chip-status" data-status="洽談中">💬 洽談中 (<span id="countNegotiating">0</span>)</button>
+              <button class="chip chip-status" data-status="已拜訪">✅ 已拜訪 (<span id="countDone">0</span>)</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1577,6 +1671,17 @@ html_template = '''<!DOCTYPE html>
     let searchDebounceTimer = null;
     let markerDebounceTimer = null;
     let currentMobileView = "split"; // "list", "split", "map"
+
+    // --- RWD Mobile Filter Chips Collapsible ---
+    window.toggleMobileFilters = function() {
+      const section = document.getElementById('collapsibleFilterSection');
+      const textSpan = document.getElementById('filtersToggleText');
+      if (!section) return;
+      const isCollapsed = section.classList.toggle('collapsed');
+      if (textSpan) {
+        textSpan.innerText = isCollapsed ? '▼ 展開篩選' : '▲ 收合篩選';
+      }
+    };
 
     // --- RWD Mobile View Switcher ---
     window.setMobileView = function(mode) {
@@ -1947,7 +2052,7 @@ html_template = '''<!DOCTYPE html>
         Object.keys(PARKS).forEach(pid => {
           baseClients = baseClients.concat(getPersistedParkClients(pid));
         });
-        document.getElementById('headerTitle').innerText = '全台外勤巡訪地圖總中樞 · 18 縣市 72 大園區總覽';
+        document.getElementById('headerTitle').innerText = '全台科技＆產業園區地圖 · 18 縣市 72 大園區總覽';
         document.getElementById('headerSubtitle').innerText = `全台合計 ${baseClients.length.toLocaleString()} 家廠商巡訪指南`;
       } else if (parkId.startsWith("all_")) {
         const cid = parkId.replace("all_", "");
@@ -1956,13 +2061,13 @@ html_template = '''<!DOCTYPE html>
         (cinfo.parks || []).forEach(pid => {
           baseClients = baseClients.concat(getPersistedParkClients(pid));
         });
-        document.getElementById('headerTitle').innerText = `${cinfo.name}外勤巡訪地圖 · 全縣/市總覽`;
+        document.getElementById('headerTitle').innerText = `全台科技＆產業園區地圖 · ${cinfo.name}總覽`;
         document.getElementById('headerSubtitle').innerText = `${cinfo.name} ${cinfo.parks.length} 大園區合計 ${baseClients.length.toLocaleString()} 家廠商巡訪指南`;
       } else {
         baseClients = getPersistedParkClients(parkId);
         const pcfg = PARKS[parkId];
         const countyName = COUNTIES[pcfg.county_id] ? COUNTIES[pcfg.county_id].name : '';
-        document.getElementById('headerTitle').innerText = `業務外勤拜訪地圖 - ${pcfg.name}`;
+        document.getElementById('headerTitle').innerText = `全台科技＆產業園區地圖 · ${pcfg.name}`;
         document.getElementById('headerSubtitle').innerText = `${countyName} · ${pcfg.name} · ${pcfg.clients.length} 家廠商全區地圖（支援上市櫃、產業、同路巡訪快篩）`;
       }
 
@@ -2772,9 +2877,9 @@ html_template = '''<!DOCTYPE html>
         }
       });
 
-      // Export CSV (含縣市、園區、外勤拜訪紀錄與下次待辦)
+      // Export CSV (含縣市、園區、外勤拜訪紀錄與下次待辦，繁體中文欄位表頭)
       document.getElementById('btnExport').addEventListener('click', () => {
-        let csvContent = "\\uFEFFid,county,park,name,road,address,lat,lng,industry,is_listed,status,contact,phone,notes,visit_count,latest_visit_date,latest_visit_contact,latest_visit_outcome,latest_visit_summary,latest_visit_next\\n";
+        let csvContent = "\\uFEFF客戶編號,縣市,工業或科技園區,公司名稱,所在路段,完整廠址,緯度(Lat),經度(Lng),產業類別,是否上市櫃,拜訪狀態,聯絡窗口,聯絡電話,拜訪備忘與筆記,累計拜訪次數,最新拜訪日期,最新接洽對象,最新洽談階段,最新洽談重點,下次預計待辦事項與回訪日\\n";
         clients.forEach(c => {
           const logs = c.visit_logs || [];
           const latest = logs.length > 0 ? logs[0] : {};
@@ -2810,7 +2915,7 @@ html_template = '''<!DOCTYPE html>
         const a = document.createElement("a");
         a.href = url;
         const parkName = PARKS[currentPark] ? PARKS[currentPark].name : currentPark;
-        a.download = `${parkName}_業務拜訪與洽談紀錄_${new Date().toISOString().slice(0,10)}.csv`;
+        a.download = `全台科技園區_${parkName}_業務拜訪與洽談紀錄_${new Date().toISOString().slice(0,10)}.csv`;
         a.click();
         URL.revokeObjectURL(url);
       });
@@ -2880,7 +2985,7 @@ html_template = '''<!DOCTYPE html>
       });
     });
 
-    // Helper: Parse CSV
+    // Helper: Parse CSV (支援中文欄位與英文欄位雙向相容、引號與 BOM 解析)
     function parseAndImportCSV(csvText) {
       const lines = csvText.split(/\\r?\\n/).filter(line => line.trim() !== "");
       if (lines.length <= 1) {
@@ -2888,28 +2993,78 @@ html_template = '''<!DOCTYPE html>
         return;
       }
 
-      const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ''));
+      function parseCSVLine(line) {
+        const result = [];
+        let cur = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              cur += '"';
+              i++;
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === ',' && !inQuotes) {
+            result.push(cur.trim());
+            cur = '';
+          } else {
+            cur += char;
+          }
+        }
+        result.push(cur.trim());
+        return result;
+      }
+
+      const headers = parseCSVLine(lines[0].replace(/^\\uFEFF/, '')).map(h => h.trim().replace(/^"|"$/g, ''));
+      const colMap = {};
+      headers.forEach((h, idx) => {
+        colMap[h] = idx;
+      });
+
+      const getVal = (row, ...keys) => {
+        for (const k of keys) {
+          if (colMap[k] !== undefined && row[colMap[k]] !== undefined) {
+            return row[colMap[k]];
+          }
+        }
+        return '';
+      };
+
       const imported = [];
 
       for (let i = 1; i < lines.length; i++) {
-        const row = lines[i].split(",").map(val => val.trim().replace(/^"|"$/g, ''));
-        if (row.length < 5) continue;
+        const row = parseCSVLine(lines[i]);
+        if (row.length < 3) continue;
+
+        const name = getVal(row, '公司名稱', 'name') || (row.length > 3 ? row[3] : row[1]) || `客戶 ${i}`;
+        const road = getVal(row, '所在路段', 'road') || (row.length > 4 ? row[4] : row[2]) || '園區內';
+        const address = getVal(row, '完整廠址', 'address') || (row.length > 5 ? row[5] : row[3]) || '';
+        const latVal = parseFloat(getVal(row, '緯度(Lat)', 'lat') || (row.length > 6 ? row[6] : row[4]));
+        const lngVal = parseFloat(getVal(row, '經度(Lng)', 'lng') || (row.length > 7 ? row[7] : row[5]));
+        const industry = getVal(row, '產業類別', 'industry') || (row.length > 8 ? row[8] : row[6]) || '其他';
+        const is_listed = getVal(row, '是否上市櫃', 'is_listed') || (row.length > 9 ? row[9] : row[7]) || '否';
+        const status = getVal(row, '拜訪狀態', 'status') || (row.length > 10 ? row[10] : row[8]) || '尚未拜訪';
+        const contact = getVal(row, '聯絡窗口', 'contact') || (row.length > 11 ? row[11] : row[9]) || '';
+        const phone = getVal(row, '聯絡電話', 'phone') || (row.length > 12 ? row[12] : row[10]) || '';
+        const notes = getVal(row, '拜訪備忘與筆記', 'notes') || (row.length > 13 ? row[13] : row[11]) || '';
 
         imported.push({
           id: Date.now() + i,
           park_id: currentPark,
           county_id: currentCounty,
-          name: row[1] || `客戶 ${i}`,
-          road: row[2] || "園區內",
-          address: row[3] || "",
-          lat: parseFloat(row[4]) || 25.0880,
-          lng: parseFloat(row[5]) || 121.7010,
-          industry: row[6] || "其他",
-          is_listed: row[7] || "否",
-          status: row[8] || "尚未拜訪",
-          contact: row[9] || "",
-          phone: row[10] || "",
-          notes: row[11] || "",
+          name: name,
+          road: road,
+          address: address,
+          lat: !isNaN(latVal) && latVal > 0 ? latVal : (PARKS[currentPark] ? PARKS[currentPark].lat : 24.97),
+          lng: !isNaN(lngVal) && lngVal > 0 ? lngVal : (PARKS[currentPark] ? PARKS[currentPark].lng : 121.23),
+          industry: industry,
+          is_listed: is_listed,
+          status: status,
+          contact: contact,
+          phone: phone,
+          notes: notes,
           visit_logs: []
         });
       }
@@ -2925,7 +3080,7 @@ html_template = '''<!DOCTYPE html>
         renderList();
         alert("名單匯入成功！");
       } else {
-        alert("解析 CSV 失敗，請確認欄位格式是否與範本一致。");
+        alert("解析 CSV 失敗，請確認欄位格式是否包含公司名稱、地址等欄位。");
       }
     }
   </script>
