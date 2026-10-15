@@ -540,6 +540,80 @@
       color: var(--text-muted);
     }
 
+    /* Data Update & Source Bar */
+    .data-update-bar {
+      padding: 6px 16px;
+      background: #FAF8F5;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+    }
+    .update-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #475569;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .update-text {
+      font-size: 11px;
+      color: #334155;
+    }
+    .update-sub {
+      color: #64748B;
+      font-size: 10.5px;
+    }
+    .status-pulse-dot {
+      width: 7px;
+      height: 7px;
+      background: #10B981;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: pulseGreen 2s infinite;
+    }
+    @keyframes pulseGreen {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 5px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .btn-source-pill {
+      background: #FFFFFF;
+      border: 1px solid #CBD5E1;
+      color: var(--blue);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+    .btn-source-pill:hover {
+      background: #EEF3FC;
+      border-color: var(--blue);
+    }
+    .client-list-footer-source {
+      background: #FAF8F5;
+      border: 1px dashed #CBD5E1;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 11px;
+      color: #64748B;
+      text-align: center;
+      margin-top: 6px;
+    }
+
     .client-list {
       flex: 1;
       overflow-y: auto;
@@ -1041,6 +1115,23 @@
       border-color: #2563EB;
       box-shadow: 0 1px 4px rgba(37, 99, 235, 0.15);
     }
+    .btn-source {
+      background: #F0FDF4;
+      color: #166534;
+      border: 1px solid #BBF7D0;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-source:hover {
+      background: #DCFCE7;
+      border-color: #86EFAC;
+    }
     .btn-default-setting b {
       color: #16213A;
       font-weight: 900;
@@ -1452,6 +1543,9 @@
       <button class="btn btn-primary" id="btnAddClient" title="新增自訂客戶">
         <span>➕</span><span class="btn-text"> 新增客戶</span>
       </button>
+      <button class="btn btn-source" id="btnSourceInfo" onclick="openSourceModal()" title="檢視最新資料更新資訊與 6 大官方權威資料來源">
+        <span>🏛️</span><span class="btn-text"> 資料來源</span>
+      </button>
       <input type="file" id="fileInput" accept=".csv" style="display: none;" />
     </div>
   </header>
@@ -1536,6 +1630,17 @@
       <div class="client-list-header">
         <span id="resultCountText">顯示 0 家廠商</span>
         <button id="btnResetFilter" style="background:none; border:none; color:var(--blue); font-size:11.5px; font-weight:700; cursor:pointer;">重設篩選</button>
+      </div>
+
+      <!-- Data Update & Official Source Pill Bar -->
+      <div class="data-update-bar">
+        <div class="update-meta">
+          <span class="status-pulse-dot"></span>
+          <span class="update-text">最新更新：<strong>2026年10月15日</strong> <span class="update-sub">· 每月1號自動同步</span></span>
+        </div>
+        <button type="button" class="btn-source-pill" onclick="openSourceModal()" title="點擊檢視官方權威資料來源明細">
+          🏛️ 官方資料來源
+        </button>
       </div>
 
       <!-- List of Clients -->
@@ -1798,6 +1903,83 @@
       <div style="display:flex; justify-content:flex-end;">
         <button type="button" class="btn btn-primary" onclick="closeStageManagerModal()" style="padding:7px 16px; font-size:12.5px; font-weight:800;">
           ✓ 完成並儲存
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: 官方資料來源與定時維護說明 -->
+  <div class="modal-overlay" id="modalSources" onclick="if(event.target===this)closeSourceModal()">
+    <div class="modal-card" style="max-width: 660px;">
+      <!-- Modal Header -->
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; border-bottom:1.5px solid var(--border); padding-bottom:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:24px;">🏛️</span>
+          <div>
+            <div style="font-size:11px; font-weight:800; color:var(--blue); text-transform:uppercase; letter-spacing:0.05em;">資料來源與更新機制</div>
+            <h3 style="margin:2px 0 0 0; font-size:17px; color:var(--navy); font-weight:900;">全台科技＆產業園區地圖 · 官方資料來源說明</h3>
+          </div>
+        </div>
+        <button type="button" class="btn" onclick="closeSourceModal()" style="padding:4px 8px; font-size:14px;" title="關閉視窗">✕</button>
+      </div>
+
+      <div style="max-height: 65vh; max-height: 65dvh; overflow-y: auto; padding-right: 2px; display:flex; flex-direction:column; gap:12px;">
+        <!-- Schedule card -->
+        <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:10px; padding:12px 14px;">
+          <div style="display:flex; align-items:center; gap:8px; font-weight:800; font-size:13px; color:#166534; margin-bottom:6px;">
+            <span class="status-pulse-dot"></span>
+            <span>最新資料版本與排程同步機制</span>
+          </div>
+          <div style="font-size:12px; color:#14532D; line-height:1.6;">
+            <div>📅 <strong>最新資料更新時間：</strong>2026 年 10 月 15 日</div>
+            <div>⏰ <strong>定時排程週期：</strong>每月 1 號 09:00 AM（台灣時間）定時排程自動同步更新</div>
+            <div>🤖 <strong>自動化機制：</strong>由 GitHub Actions 定期排程機器人自動比對經濟部工廠登記公示資料與國科會科學園區名冊，校驗後自動建置部署並發布更新歷程通知。</div>
+          </div>
+        </div>
+
+        <!-- Sources list card -->
+        <div>
+          <div style="font-size:13px; font-weight:900; color:var(--navy); margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+            <span>📚</span> <span>官方權威資料庫明細</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
+              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">1. 經濟部產業發展署 · 全國工廠公示登記資料庫 (data.gov.tw)</div>
+              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：合法設立登記工廠清冊、工廠名稱、負責人、登記地址、產品類別與生產現況。</div>
+            </div>
+            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
+              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">2. 國家科學及技術委員會 (NSTC) · 各大科學園區管理局進駐事業名冊</div>
+              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：新竹科學園區 (竹科/竹南/銅鑼/龍潭)、中部科學園區 (中科/后里/虎尾)、南部科學園區 (南科/路竹/橋頭) 事業名冊與半導體/光電高科技產業清冊。</div>
+            </div>
+            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
+              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">3. 桃園市政府及全台各縣市政府資料開放平台</div>
+              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：地方工業區、科技園區、傳統產業聚落合法工廠即時公示資料比對。</div>
+            </div>
+            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
+              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">4. 臺灣證券交易所 (TWSE) / 證券櫃檯買賣中心 (TPEx)</div>
+              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：上市、上櫃及興櫃製造業指標大廠名錄與股票代號標註。</div>
+            </div>
+            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
+              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">5. 內政部國土測繪中心 (NLSC) 臺灣通用電子地圖 (EMAP)</div>
+              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：政府官方合法免授權圖資 WMTS 高精度街道與行政區界圖層（無商用浮水印與版權疑慮）。</div>
+            </div>
+            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
+              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">6. OpenStreetMap Foundation (OSMF)</div>
+              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：國際開源社群全球開放街道地理圖資底圖與地標興趣點輔助。</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Disclaimer -->
+        <div style="background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:10px 12px; font-size:11.5px; color:#92400E; line-height:1.5;">
+          🛡️ <strong>合法合規使用宣告：</strong>本圖資所載廠商名稱、負責人、地址均來自中華民國政府資料開放平台及科學園區公開事業名錄，不涉及未公開之個人隱私。僅供外勤拜訪動線規劃與產業巡訪合法合理使用。
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div style="margin-top:12px; border-top:1.5px solid var(--border); padding-top:10px; display:flex; justify-content:flex-end;">
+        <button type="button" class="btn btn-primary" onclick="closeSourceModal()" style="padding:7px 18px; font-weight:800;">
+          我知道了 ✓
         </button>
       </div>
     </div>
@@ -2167,6 +2349,16 @@
 
     window.closeDefaultCountyModal = function() {
       const modal = document.getElementById('modalDefaultCounty');
+      if (modal) modal.classList.remove('open');
+    };
+
+    window.openSourceModal = function() {
+      const modal = document.getElementById('modalSources');
+      if (modal) modal.classList.add('open');
+    };
+
+    window.closeSourceModal = function() {
+      const modal = document.getElementById('modalSources');
       if (modal) modal.classList.remove('open');
     };
 
@@ -2837,6 +3029,22 @@
         hint.style.cssText = "text-align:center; padding:12px; font-size:12px; color:#6B7280; font-weight:700;";
         hint.innerText = `已顯示前 ${endIndex} 家 (共 ${currentFiltered.length} 家) · 向下滾動載入更多...`;
         container.appendChild(hint);
+      } else if (currentFiltered.length > 0) {
+        const footerCard = document.createElement('div');
+        footerCard.className = 'client-list-footer-source';
+        footerCard.innerHTML = `
+          <div style="font-weight:800; color:#334155; margin-bottom:3px; display:flex; align-items:center; justify-content:center; gap:5px;">
+            <span class="status-pulse-dot"></span>
+            <span>最新更新：2026年10月15日 · 每月1號定時自動同步</span>
+          </div>
+          <div style="font-size:11px; color:#64748B; margin-bottom:6px;">
+            整合經濟部工廠登記、國科會科學園區、各縣市開放資料與上市櫃名錄
+          </div>
+          <button type="button" class="btn-source-pill" onclick="openSourceModal()" style="margin:0 auto;">
+            🏛️ 查看完整 6 大官方資料來源與規範 ➔
+          </button>
+        `;
+        container.appendChild(footerCard);
       }
     }
 
@@ -3389,6 +3597,11 @@
       document.getElementById('modalVisitLog')?.addEventListener('click', (e) => {
         if (e.target.id === 'modalVisitLog') {
           document.getElementById('modalVisitLog').classList.remove('open');
+        }
+      });
+      document.getElementById('modalSources')?.addEventListener('click', (e) => {
+        if (e.target.id === 'modalSources') {
+          closeSourceModal();
         }
       });
 
