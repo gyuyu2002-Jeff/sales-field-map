@@ -771,8 +771,17 @@
     }
 
     /* Map Styling */
-    #map {
+    .map-wrapper {
+      position: relative;
       flex: 1;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+      background: #E5E3DF;
+    }
+
+    #map {
+      width: 100%;
       height: 100%;
       background: #E5E3DF;
     }
@@ -909,12 +918,12 @@
       display: flex !important;
     }
 
-    /* Map overlay controls */
+    /* Map overlay controls (Strictly inside map-wrapper) */
     .map-controls-panel {
       position: absolute;
       top: 16px;
       right: 16px;
-      z-index: 800;
+      z-index: 500;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -1271,21 +1280,21 @@
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
       }
 
-      /* 手機視圖模式 1: 分割模式 (地圖 36%，名單 64%，視野更寬廣) */
+      /* 手機視圖模式 1: 分割模式 (地圖 38%，名單 62%) */
       .app-container.mobile-split {
         flex-direction: column;
       }
-      .app-container.mobile-split #map {
-        display: block;
-        height: 36%;
+      .app-container.mobile-split .map-wrapper {
+        display: block !important;
+        height: 38%;
         order: 1;
         flex-shrink: 0;
       }
       .app-container.mobile-split .sidebar {
-        display: flex;
+        display: flex !important;
         flex-direction: column;
         width: 100%;
-        height: 64%;
+        height: 62%;
         min-height: 0;
         order: 2;
         border-right: none;
@@ -1294,7 +1303,7 @@
       }
 
       /* 手機視圖模式 2: 名單全螢幕模式 */
-      .app-container.mobile-list #map {
+      .app-container.mobile-list .map-wrapper {
         display: none !important;
       }
       .app-container.mobile-list .sidebar {
@@ -1311,7 +1320,7 @@
       .app-container.mobile-map .sidebar {
         display: none !important;
       }
-      .app-container.mobile-map #map {
+      .app-container.mobile-map .map-wrapper {
         display: block !important;
         width: 100% !important;
         height: 100% !important;
@@ -1360,7 +1369,7 @@
         min-height: 0;
         overflow-y: auto;
         padding: 10px;
-        padding-bottom: 24px;
+        padding-bottom: 72px;
         -webkit-overflow-scrolling: touch;
       }
 
@@ -1378,14 +1387,28 @@
         max-height: 85dvh;
       }
 
+      /* Compact Horizontal Map Floating Tools on Mobile */
       .map-controls-panel {
-        top: 10px;
-        right: 10px;
+        top: 8px;
+        right: 8px;
+        flex-direction: row;
+        gap: 4px;
+        background: rgba(255, 255, 255, 0.94);
+        backdrop-filter: blur(4px);
+        padding: 4px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
       }
 
       .map-tool-btn {
-        padding: 7px 10px;
-        font-size: 11px;
+        padding: 4px 7px;
+        font-size: 11.5px;
+        border-radius: 6px;
+        box-shadow: none;
+        white-space: nowrap;
+      }
+      .map-tool-btn .tool-text {
+        display: none !important;
       }
     }
 
@@ -1522,20 +1545,22 @@
 
     </aside>
 
-    <!-- Map Container -->
-    <div id="map"></div>
+    <!-- Map Container & Floating Tools Wrapper (嚴格隔離，絕不遮擋側邊名單) -->
+    <div class="map-wrapper" id="mapWrapper">
+      <div id="map"></div>
 
-    <!-- Map Floating Tools -->
-    <div class="map-controls-panel">
-      <button class="map-tool-btn active-state" id="btnToggleLabels" onclick="toggleAutoLabels()" title="切換地圖放大時是否自動顯現廠商名稱標籤">
-        🏷️ 廠名: 自動
-      </button>
-      <button class="map-tool-btn" id="btnLocateMe" title="取得您手機或設備目前的 GPS 位置">
-        🎯 我的位置
-      </button>
-      <button class="map-tool-btn" id="btnFitBounds" title="縮放顯示全部標記點">
-        🗺️ 全區視野
-      </button>
+      <!-- Map Floating Tools (Strictly within map boundary) -->
+      <div class="map-controls-panel">
+        <button class="map-tool-btn active-state" id="btnToggleLabels" onclick="toggleAutoLabels()" title="切換地圖放大時是否自動顯現廠商名稱標籤">
+          <span class="tool-icon">🏷️</span><span class="tool-text"> 廠名: 自動</span>
+        </button>
+        <button class="map-tool-btn" id="btnLocateMe" title="取得您手機或設備目前的 GPS 位置">
+          <span class="tool-icon">🎯</span><span class="tool-text"> 我的位置</span>
+        </button>
+        <button class="map-tool-btn" id="btnFitBounds" title="縮放顯示全部標記點">
+          <span class="tool-icon">🔍</span><span class="tool-text"> 全區視野</span>
+        </button>
+      </div>
     </div>
 
   </div>
