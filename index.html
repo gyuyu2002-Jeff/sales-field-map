@@ -314,7 +314,8 @@
 
     /* Sidebar (Client Cards & Filtering) */
     .sidebar {
-      width: 460px;
+      width: 480px;
+      max-width: 45vw;
       background: var(--bg-primary);
       border-right: 1.5px solid var(--border);
       display: flex;
@@ -423,19 +424,27 @@
 
     .chips-scroll {
       display: flex;
-      gap: 5px;
-      overflow-x: auto;
-      padding-bottom: 2px;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-height: 72px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 2px 1px;
       scrollbar-width: thin;
       -webkit-overflow-scrolling: touch;
+      transition: max-height 0.2s ease;
     }
 
     .chips-scroll::-webkit-scrollbar {
-      height: 3px;
+      width: 4px;
     }
     .chips-scroll::-webkit-scrollbar-thumb {
       background: #D1CDBC;
       border-radius: 2px;
+    }
+
+    .chips-scroll.expanded {
+      max-height: 260px;
     }
 
     .chip {
@@ -463,17 +472,21 @@
       font-weight: 800;
     }
 
-    /* Status Filters */
+    /* Status Filters (100% 完整呈現，自動換行排版絕不切斷按鈕) */
     .status-chips-scroll {
       display: flex;
-      gap: 5px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      -webkit-overflow-scrolling: touch;
+      flex-wrap: wrap;
+      gap: 6px;
+      width: 100%;
     }
 
     .chip-status {
-      padding: 5px 10px;
+      flex: 1 1 auto;
+      min-width: 92px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
       font-size: 11.5px;
       font-weight: 700;
       border-radius: 6px;
@@ -483,6 +496,7 @@
       cursor: pointer;
       white-space: nowrap;
       transition: all 0.15s ease;
+      box-sizing: border-box;
     }
 
     .chip-status:hover {
@@ -1114,7 +1128,7 @@
     /* 平板適配 (iPad / Tablet: 769px ~ 1024px) */
     @media (max-width: 1024px) {
       .sidebar {
-        width: 380px;
+        width: 440px;
       }
       .brand-title {
         font-size: 16px;
@@ -1440,7 +1454,10 @@
           <div class="chips-group">
             <div class="chips-label">
               <span>🏭 產業類別快篩</span>
-              <span id="indCurrentLabel" style="font-size:10.5px; color:var(--blue);">全部產業</span>
+              <span style="display:flex; align-items:center; gap:8px;">
+                <span id="indCurrentLabel" style="font-size:10.5px; color:var(--blue);">全部產業</span>
+                <button type="button" id="btnExpandInd" onclick="toggleChipsExpand('industryChips', 'btnExpandInd')" style="background:none; border:none; color:var(--blue); font-size:11px; font-weight:700; cursor:pointer; padding:0; text-decoration:underline;">展開全部 ▼</button>
+              </span>
             </div>
             <div class="chips-scroll" id="industryChips">
               <!-- Dynamically populated -->
@@ -1451,7 +1468,10 @@
           <div class="chips-group">
             <div class="chips-label">
               <span>📍 同路巡訪快篩（同一條路順路拜訪）</span>
-              <span id="roadCurrentLabel" style="font-size:10.5px; color:var(--blue);">全部路段</span>
+              <span style="display:flex; align-items:center; gap:8px;">
+                <span id="roadCurrentLabel" style="font-size:10.5px; color:var(--blue);">全部路段</span>
+                <button type="button" id="btnExpandRoad" onclick="toggleChipsExpand('roadChips', 'btnExpandRoad')" style="background:none; border:none; color:var(--blue); font-size:11px; font-weight:700; cursor:pointer; padding:0; text-decoration:underline;">展開全部 ▼</button>
+              </span>
             </div>
             <div class="chips-scroll" id="roadChips">
               <!-- Dynamically populated -->
@@ -1950,6 +1970,17 @@
       const isCollapsed = section.classList.toggle('collapsed');
       if (textSpan) {
         textSpan.innerText = isCollapsed ? '▼ 展開篩選' : '▲ 收合篩選';
+      }
+    };
+
+    // --- Chips Multi-line Expand / Collapse Toggle ---
+    window.toggleChipsExpand = function(containerId, btnId) {
+      const container = document.getElementById(containerId);
+      const btn = document.getElementById(btnId);
+      if (!container) return;
+      const isExp = container.classList.toggle('expanded');
+      if (btn) {
+        btn.innerText = isExp ? '收合 ▲' : '展開全部 ▼';
       }
     };
 
