@@ -1,11 +1,11 @@
-name: 每月定時自動同步政府公開工廠資料 (Monthly Government Data Sync)
+name: 每月 1 號定時自動更新與發布通報 (Monthly Auto Update & Report)
 
 on:
   schedule:
-    # 每月 1 號 台灣時間上午 10:00 (UTC 02:00) 自動執行
-    - cron: '0 2 1 * *'
+    # 每月 1 號 台灣時間上午 09:00 (UTC 01:00) 自動執行
+    - cron: '0 1 1 * *'
   workflow_dispatch:
-    # 支援隨時手動一鍵觸發
+    # 支援在 GitHub 網頁隨時一鍵手動觸發測試
     inputs:
       force_update:
         description: '是否強制重新全量審計與編譯'
@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 執行政府公開資料同步機器人
+      - name: 執行政府公開資料同步與地圖重編
         run: |
           python scripts/update_government_data.py
 
@@ -42,12 +42,21 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
           # 檢查是否有檔案異動
-          if [[ -n $(git status -s all_taoyuan_parks.json index.html) ]]; then
+          if [[ -n $(git status -s) ]]; then
             echo "檢測到資料更新，準備自動 Commit & Push..."
-            git add all_taoyuan_parks.json index.html README.md
-            git commit -m "chore(bot): 每月定時自動同步政府公開工廠資料庫 ($(date +'%Y-%m'))"
+            git add -A
+            git commit -m "chore(bot): 每月 1 號定時自動更新資料庫與地圖發布 ($(date +'%Y-%m'))"
             git push origin main
             echo "✅ 已成功推送更新至 GitHub！GitHub Pages 即將自動部署。"
           else
             echo "ℹ️ 目前各園區資料皆為最新，無須重複提交。"
           fi
+
+      - name: 發送每月更新通報郵件至 wujeff520@gmail.com
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_SERVER: "smtp.gmail.com"
+          SMTP_PORT: 465
+        run: |
+          python send_monthly_report.py
