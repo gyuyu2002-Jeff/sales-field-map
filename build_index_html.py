@@ -46,6 +46,19 @@ else:
 # Compact JSON serialization
 database_json = json.dumps(database_bundle, ensure_ascii=False)
 
+import base64
+
+def get_base64_data_uri(filepath, mime='image/png'):
+    if os.path.exists(filepath):
+        with open(filepath, 'rb') as f:
+            b64 = base64.b64encode(f.read()).decode('ascii')
+            return f"data:{mime};base64,{b64}"
+    return ""
+
+b64_32_uri = get_base64_data_uri('favicon-32x32.png')
+b64_16_uri = get_base64_data_uri('favicon-16x16.png')
+b64_apple_uri = get_base64_data_uri('apple-touch-icon.png')
+
 html_template = '''<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -56,12 +69,16 @@ html_template = '''<!DOCTYPE html>
   <meta name="apple-mobile-web-app-title" content="全台科技＆產業園區地圖">
   <meta name="theme-color" content="#16213A">
 
-  <!-- Favicon & Bookmarks Icons (我的最愛與分頁圖示) -->
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <!-- Favicon & Bookmarks Icons (我的最愛與分頁專屬高清小圖示 - 內嵌 Data URI 保證離線與書籤即時抓取) -->
+  <link rel="shortcut icon" type="image/png" href="__B64_32_URI__">
+  <link rel="icon" type="image/png" sizes="32x32" href="__B64_32_URI__">
+  <link rel="icon" type="image/png" sizes="16x16" href="__B64_16_URI__">
+  <link rel="apple-touch-icon" sizes="180x180" href="__B64_APPLE_URI__">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-  <link rel="shortcut icon" href="favicon.ico">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
@@ -3533,6 +3550,7 @@ html_template = '''<!DOCTYPE html>
 '''
 
 full_html = html_template.replace('__DATABASE_BUNDLE_PLACEHOLDER__', database_json)
+full_html = full_html.replace('__B64_32_URI__', b64_32_uri).replace('__B64_16_URI__', b64_16_uri).replace('__B64_APPLE_URI__', b64_apple_uri)
 
 with open('index.html', 'w', encoding='utf-8') as f:
     f.write(full_html)
