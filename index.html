@@ -3,10 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>全台科技＆產業園區地圖</title>
+  <title>全台科技＆產業園區地圖 · 外勤巡訪指南</title>
   <meta name="application-name" content="全台科技＆產業園區地圖">
   <meta name="apple-mobile-web-app-title" content="全台科技＆產業園區地圖">
   <meta name="theme-color" content="#16213A">
+
+  <!-- SEO & Social Share Preview (LINE / FB 連結中文預覽摘要卡片) -->
+  <meta name="description" content="全台科技＆產業園區地圖 · 外勤巡訪指南。收錄科學園區與工業區廠房名冊，支援同路巡訪快篩、一鍵 Google 導航、外勤拜訪進度與 CSV 匯出。">
+  <meta property="og:title" content="全台科技＆產業園區地圖 · 外勤巡訪指南">
+  <meta property="og:description" content="全台科學園區與工業區廠房名冊，支援同路巡訪快篩、一鍵 Google 導航、外勤拜訪進度與 CSV 匯出。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://gyuyu2002-jeff.github.io/sales-field-map/">
+  <meta property="og:image" content="https://gyuyu2002-jeff.github.io/sales-field-map/apple-touch-icon.png">
+  <meta property="og:site_name" content="全台科技＆產業園區地圖">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="全台科技＆產業園區地圖 · 外勤巡訪指南">
+  <meta name="twitter:description" content="全台科學園區與工業區廠房名冊，支援同路巡訪快篩、一鍵 Google 導航、外勤拜訪進度與 CSV 匯出。">
+  <meta name="twitter:image" content="https://gyuyu2002-jeff.github.io/sales-field-map/apple-touch-icon.png">
 
   <!-- Favicon & Bookmarks Icons (我的最愛與分頁專屬高清小圖示 - 內嵌 Data URI 保證離線與書籤即時抓取) -->
   <link rel="shortcut icon" type="image/png" href="data:image/png;base64,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">
