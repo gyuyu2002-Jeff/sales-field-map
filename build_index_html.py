@@ -2733,7 +2733,13 @@ html_template = '''<!DOCTYPE html>
     function initMap() {
       map = L.map('map', {
         zoomControl: true,
-        attributionControl: false
+        attributionControl: false,
+        // 平滑滾輪縮放參數：解決滑鼠滾動一格瞬間跳躍縮放 3~4 次的問題
+        scrollWheelZoom: true,
+        wheelPxPerZoomLevel: 180, // 大幅降低滾輪縮放敏感度（Leaflet 預設值 60 容易讓一般滑鼠滾一格衝過頭連跳數級）
+        wheelDebounceTime: 150,   // 滾輪防抖時間（預設值 40ms，提高到 150ms 可完整合併滑鼠刻度產生的微小連續脈衝）
+        zoomDelta: 1,             // 每次縮放固定只跳 1 級，杜絕過度跳躍
+        zoomSnap: 1               // 縮放精準對齊整數級別，維持地圖磁磚清晰銳利
       }).setView([25.0880, 121.7010], 15);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
