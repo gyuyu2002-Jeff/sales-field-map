@@ -44,26 +44,28 @@ else:
     raise FileNotFoundError("找不到任何工業區資料庫檔案！")
 
 # Compact JSON serialization
-database_json = json.dumps(database_bundle, ensure_ascii=False)
+from pathlib import Path
+import hashlib
+metadata = {"counties": database_bundle["counties"], "parks": {}}
+Path('data').mkdir(exist_ok=True)
+for pid, park in database_bundle['parks'].items():
+    payload = json.dumps(park['clients'], ensure_ascii=False, separators=(',', ':'))
+    digest = hashlib.sha256(payload.encode('utf-8')).hexdigest()[:12]
+    filename = f'data/{pid}.{digest}.json'
+    Path(filename).write_text(payload, encoding='utf-8')
+    metadata['parks'][pid] = {k: v for k, v in park.items() if k not in ('clients', 'verified_official_registry', 'last_sync_date')}
+    metadata['parks'][pid].update(count=len(park['clients']), data_url=filename)
+database_json = json.dumps(metadata, ensure_ascii=False).replace('<', '\\u003c')
 
-import base64
-
-def get_base64_data_uri(filepath, mime='image/png'):
-    if os.path.exists(filepath):
-        with open(filepath, 'rb') as f:
-            b64 = base64.b64encode(f.read()).decode('ascii')
-            return f"data:{mime};base64,{b64}"
-    return ""
-
-b64_32_uri = get_base64_data_uri('favicon-32x32.png')
-b64_16_uri = get_base64_data_uri('favicon-16x16.png')
-b64_apple_uri = get_base64_data_uri('apple-touch-icon.png')
+b64_32_uri = 'favicon-32x32.png'
+b64_16_uri = 'favicon-16x16.png'
+b64_apple_uri = 'apple-touch-icon.png'
 
 html_template = '''<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>全台科技＆產業園區地圖</title>
   <meta name="application-name" content="全台科技＆產業園區地圖">
   <meta name="apple-mobile-web-app-title" content="全台科技＆產業園區地圖">
@@ -94,7 +96,7 @@ html_template = '''<!DOCTYPE html>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   
   <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <!-- Google Fonts: Noto Sans TC -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1577,6 +1579,30 @@ html_template = '''<!DOCTYPE html>
         font-size: 13px;
       }
     }
+    :focus-visible { outline:3px solid #2563eb; outline-offset:3px; }
+    .sidebar-controls { flex-shrink:0; max-height:65%; overflow-y:auto; }
+    .client-list { min-height:80px; }
+    .storage-notice { font-size:11px; color:#475569; padding:4px 12px; background:#f8fafc; flex-shrink:0; }
+    .data-warning { font-size:12px; color:#854d0e; padding:6px 12px; background:#fef9c3; flex-shrink:0; }
+    @media (max-width:768px) {
+      header { flex-wrap:wrap; gap:4px; padding:6px 10px; }
+      .brand { min-width:0; width:100%; }
+      .brand-title { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .brand > div:last-child { min-width:0; }
+      .header-actions { width:100%; justify-content:space-between; gap:3px; }
+      .header-actions .btn { min-width:44px; min-height:44px; }
+      .header-actions .btn-text, #headerDefaultCountyLabel { display:none; }
+      .sidebar { max-width:100%; }
+      .sidebar-controls { max-height:60%; }
+      .collapsible-filters.collapsed { display:none; }
+      .map-tool-btn, .view-btn, .btn-log, .nav-btn, .status-select { min-height:44px; }
+      .map-tool-btn { min-width:44px; }
+      .modal-overlay { padding:8px; }
+      .modal-card { max-height:92dvh !important; overflow-y:auto; }
+      input,select,textarea { font-size:16px !important; }
+      .data-warning,.storage-notice { font-size:11px; padding:3px 10px; }
+    }
+    @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; animation:none !important; transition:none !important; } }
   </style>
 </head>
 <body>
@@ -1595,22 +1621,25 @@ html_template = '''<!DOCTYPE html>
       <button class="btn btn-default-setting" id="btnDefaultCountySetting" onclick="openDefaultCountyModal(false)" title="點擊設定或更改預設常駐縣市">
         <span>⭐</span><span class="btn-text"> 預設: </span><b id="headerDefaultCountyLabel">桃園市</b>
       </button>
-      <button class="btn" id="btnExport" title="匯出當前拜訪狀態為 CSV 檔（含詳細拜訪紀錄與摘要）">
+      <button class="btn" id="btnExport" title="匯出當前拜訪狀態為 CSV 檔（僅含最新拜訪摘要；完整歷程請用完整備份）">
         <span>📤</span><span class="btn-text"> 匯出記錄</span>
       </button>
-      <button class="btn" id="btnImport" title="匯入客製化客戶名單 CSV">
+      <button class="btn" id="btnImport" title="匯入 CSV 名單或還原 JSON 完整備份">
         <span>📥</span><span class="btn-text"> 匯入名單</span>
       </button>
       <button class="btn btn-primary" id="btnAddClient" title="新增自訂客戶">
         <span>➕</span><span class="btn-text"> 新增客戶</span>
       </button>
-      <button class="btn btn-source" id="btnSourceInfo" onclick="openSourceModal()" title="檢視最新資料更新資訊與 6 大官方權威資料來源">
+      <button class="btn btn-source" id="btnSourceInfo" onclick="openSourceModal()" title="檢視資料來源與核對狀態">
         <span>🏛️</span><span class="btn-text"> 資料來源</span>
       </button>
-      <input type="file" id="fileInput" accept=".csv" style="display: none;" />
+      <button class="btn" id="btnBackup" title="完整備份全部園區、客戶與拜訪歷程"><span>💾</span><span class="btn-text">完整備份</span></button>
+      <input type="file" id="fileInput" accept=".csv,.json" style="display: none;" />
     </div>
   </header>
 
+  <div class="data-warning">⚠ 既有名冊含程式生成資料，尚未逐筆核對。地址、電話與上市櫃標示請先向官方確認。</div>
+  <div class="storage-notice" id="storageNotice" role="status"></div>
   <!-- Tier 1: 縣市導航列 (西部北到南 -> 東部北到南) -->
   <nav class="county-nav-bar" id="countyNavBar">
     <!-- Populated by JavaScript in exact geographic order -->
@@ -1697,10 +1726,10 @@ html_template = '''<!DOCTYPE html>
       <div class="data-update-bar">
         <div class="update-meta">
           <span class="status-pulse-dot"></span>
-          <span class="update-text">最新更新：<strong>2026年10月15日</strong> <span class="update-sub">· 每月1號自動同步</span></span>
+          <span class="update-text">名冊<strong>尚待核對</strong> <span class="update-sub">· 無官方同步紀錄</span></span>
         </div>
-        <button type="button" class="btn-source-pill" onclick="openSourceModal()" title="點擊檢視官方權威資料來源明細">
-          🏛️ 官方資料來源
+        <button type="button" class="btn-source-pill" onclick="openSourceModal()" title="點擊檢視資料來源與核對狀態">
+          🏛️ 資料來源與核對狀態
         </button>
       </div>
 
@@ -1969,88 +1998,36 @@ html_template = '''<!DOCTYPE html>
     </div>
   </div>
 
-  <!-- Modal: 官方資料來源與定時維護說明 -->
-  <div class="modal-overlay" id="modalSources" onclick="if(event.target===this)closeSourceModal()">
-    <div class="modal-card" style="max-width: 660px;">
-      <!-- Modal Header -->
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; border-bottom:1.5px solid var(--border); padding-bottom:10px;">
-        <div style="display:flex; align-items:center; gap:10px;">
-          <span style="font-size:24px;">🏛️</span>
-          <div>
-            <div style="font-size:11px; font-weight:800; color:var(--blue); text-transform:uppercase; letter-spacing:0.05em;">資料來源與更新機制</div>
-            <h3 style="margin:2px 0 0 0; font-size:17px; color:var(--navy); font-weight:900;">全台科技＆產業園區地圖 · 官方資料來源說明</h3>
-          </div>
-        </div>
-        <button type="button" class="btn" onclick="closeSourceModal()" style="padding:4px 8px; font-size:14px;" title="關閉視窗">✕</button>
-      </div>
-
-      <div style="max-height: 65vh; max-height: 65dvh; overflow-y: auto; padding-right: 2px; display:flex; flex-direction:column; gap:12px;">
-        <!-- Schedule card -->
-        <div style="background:#F0FDF4; border:1px solid #BBF7D0; border-radius:10px; padding:12px 14px;">
-          <div style="display:flex; align-items:center; gap:8px; font-weight:800; font-size:13px; color:#166534; margin-bottom:6px;">
-            <span class="status-pulse-dot"></span>
-            <span>最新資料版本與排程同步機制</span>
-          </div>
-          <div style="font-size:12px; color:#14532D; line-height:1.6;">
-            <div>📅 <strong>最新資料更新時間：</strong>2026 年 10 月 15 日</div>
-            <div>⏰ <strong>定時排程週期：</strong>每月 1 號 09:00 AM（台灣時間）定時排程自動同步更新</div>
-            <div>🤖 <strong>自動化機制：</strong>由 GitHub Actions 定期排程機器人自動比對經濟部工廠登記公示資料與國科會科學園區名冊，校驗後自動建置部署並發布更新歷程通知。</div>
-          </div>
-        </div>
-
-        <!-- Sources list card -->
-        <div>
-          <div style="font-size:13px; font-weight:900; color:var(--navy); margin-bottom:8px; display:flex; align-items:center; gap:6px;">
-            <span>📚</span> <span>官方權威資料庫明細</span>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
-              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">1. 經濟部產業發展署 · 全國工廠公示登記資料庫 (data.gov.tw)</div>
-              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：合法設立登記工廠清冊、工廠名稱、負責人、登記地址、產品類別與生產現況。</div>
-            </div>
-            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
-              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">2. 國家科學及技術委員會 (NSTC) · 各大科學園區管理局進駐事業名冊</div>
-              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：新竹科學園區 (竹科/竹南/銅鑼/龍潭)、中部科學園區 (中科/后里/虎尾)、南部科學園區 (南科/路竹/橋頭) 事業名冊與半導體/光電高科技產業清冊。</div>
-            </div>
-            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
-              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">3. 桃園市政府及全台各縣市政府資料開放平台</div>
-              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：地方工業區、科技園區、傳統產業聚落合法工廠即時公示資料比對。</div>
-            </div>
-            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
-              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">4. 臺灣證券交易所 (TWSE) / 證券櫃檯買賣中心 (TPEx)</div>
-              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：上市、上櫃及興櫃製造業指標大廠名錄與股票代號標註。</div>
-            </div>
-            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
-              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">5. 內政部國土測繪中心 (NLSC) 臺灣通用電子地圖 (EMAP)</div>
-              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：政府官方合法免授權圖資 WMTS 高精度街道與行政區界圖層（無商用浮水印與版權疑慮）。</div>
-            </div>
-            <div style="background:#FAF8F5; border:1px solid var(--border); border-radius:8px; padding:10px 12px;">
-              <div style="font-weight:800; font-size:12.5px; color:var(--navy);">6. OpenStreetMap Foundation (OSMF)</div>
-              <div style="font-size:11.5px; color:#6B7280; margin-top:2px;">用途：國際開源社群全球開放街道地理圖資底圖與地標興趣點輔助。</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Disclaimer -->
-        <div style="background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:10px 12px; font-size:11.5px; color:#92400E; line-height:1.5;">
-          🛡️ <strong>合法合規使用宣告：</strong>本圖資所載廠商名稱、負責人、地址均來自中華民國政府資料開放平台及科學園區公開事業名錄，不涉及未公開之個人隱私。僅供外勤拜訪動線規劃與產業巡訪合法合理使用。
-        </div>
-      </div>
-
-      <!-- Modal Footer -->
-      <div style="margin-top:12px; border-top:1.5px solid var(--border); padding-top:10px; display:flex; justify-content:flex-end;">
-        <button type="button" class="btn btn-primary" onclick="closeSourceModal()" style="padding:7px 18px; font-weight:800;">
-          我知道了 ✓
-        </button>
-      </div>
+  <!-- Modal: 資料來源與核對狀態與定時維護說明 -->
+  <div class="modal-overlay" id="modalSources">
+    <div class="modal-card"><h3>資料來源與核對狀態</h3>
+      <p>既有名冊包含程式生成的公司名稱、聯絡人、電話與座標，尚未逐筆核對。請勿直接視為官方名冊或據此撥打電話、前往拜訪。</p>
+      <p>最後成功官方同步：尚無可驗證紀錄。每月排程目前僅檢查資料格式，不代表官方名冊已更新。</p>
+      <p>下列為查核入口，並非已完成串接的資料來源：</p>
+      <ul>
+        <li><a href="https://data.gov.tw/dataset/6037" target="_blank" rel="noopener noreferrer">政府資料開放平臺：工廠登記資料</a></li>
+        <li><a href="https://www.sipa.gov.tw/" target="_blank" rel="noopener noreferrer">新竹科學園區管理局</a></li>
+        <li><a href="https://www.ctsp.gov.tw/" target="_blank" rel="noopener noreferrer">中部科學園區管理局</a></li>
+        <li><a href="https://www.stsp.gov.tw/" target="_blank" rel="noopener noreferrer">南部科學園區管理局</a></li>
+        <li><a href="https://mops.twse.com.tw/" target="_blank" rel="noopener noreferrer">公開資訊觀測站：上市櫃公司查詢</a></li>
+        <li><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">目前底圖：OpenStreetMap 與授權說明</a></li>
+      </ul>
+      <p>客戶及拜訪資料僅存於目前裝置的瀏覽器。清除網站資料、使用無痕模式或更換裝置可能遺失紀錄；請定期下載完整備份。備份包含聯絡資訊與筆記，請妥善保管。</p>
+      <p>底圖與字型由第三方載入；定位需經您的允許，導航會把目的地地址交給 Google Maps。</p>
+      <button class="btn" onclick="closeSourceModal()">關閉</button>
     </div>
   </div>
-
-  <!-- Toast Notification Element -->
-  <div class="toast-notice" id="toastNotice"></div>
-
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <div class="modal-overlay" id="modalImport"><div class="modal-card">
+    <h3>確認匯入內容</h3><p id="importSummary" style="white-space:pre-wrap"></p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" id="importCancel">取消，不變更資料</button>
+      <button class="btn" id="importAppend">追加名單</button>
+      <button class="btn btn-primary" id="importReplace">備份後覆蓋本園區</button>
+    </div>
+  </div></div>
+  <script src="data-tools.js"></script>
+  <script src="app-support.js"></script>
+  <script src="vendor/leaflet/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   
   <script>
     // --- 全台 18 縣市完整工業與科技園區資料庫 ---
@@ -2103,7 +2080,7 @@ html_template = '''<!DOCTYPE html>
 
     function loadCustomStages() {
       try {
-        const saved = localStorage.getItem(STAGE_STORAGE_KEY);
+        const saved = appStorage.getItem(STAGE_STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
@@ -2119,7 +2096,7 @@ html_template = '''<!DOCTYPE html>
 
     function saveCustomStages() {
       try {
-        localStorage.setItem(STAGE_STORAGE_KEY, JSON.stringify(customStagesList));
+        appStorage.setItem(STAGE_STORAGE_KEY, JSON.stringify(customStagesList));
       } catch (e) {
         console.error("Failed to save custom stages", e);
       }
@@ -2188,7 +2165,7 @@ html_template = '''<!DOCTYPE html>
         row.innerHTML = `
           <div style="font-weight:700; color:var(--navy); display:flex; align-items:center; gap:6px;">
             <span style="color:var(--blue); font-size:11px;">#${idx + 1}</span>
-            <span>${st}</span>
+            <span>${escapeHtml(st)}</span>
           </div>
           <button type="button" onclick="deleteCustomStage(${idx})" title="刪除此階段" style="background:none; border:none; color:#EF4444; font-size:13px; cursor:pointer; padding:2px 5px; border-radius:4px;">
             🗑️
@@ -2293,61 +2270,7 @@ html_template = '''<!DOCTYPE html>
     }
 
     // Load persisted park status/notes/visit_logs from localStorage
-    function getPersistedParkClients(pid) {
-      const parkCfg = PARKS[pid];
-      if (!parkCfg || !parkCfg.clients) return [];
-      
-      const storageKey = getParkStorageKey(pid);
-      const stored = localStorage.getItem(storageKey);
-      if (!stored) {
-        return parkCfg.clients.map(c => ({ ...c, park_id: pid, county_id: parkCfg.county_id, visit_logs: c.visit_logs || [] }));
-      }
 
-      try {
-        const storedList = JSON.parse(stored);
-        const mapById = {};
-        storedList.forEach(item => {
-          mapById[item.id] = {
-            status: item.status,
-            notes: item.notes,
-            visit_logs: item.visit_logs || []
-          };
-        });
-
-        return parkCfg.clients.map(c => {
-          if (mapById[c.id]) {
-            return {
-              ...c,
-              park_id: pid,
-              county_id: parkCfg.county_id,
-              status: mapById[c.id].status,
-              notes: mapById[c.id].notes,
-              visit_logs: mapById[c.id].visit_logs || []
-            };
-          }
-          return { ...c, park_id: pid, county_id: parkCfg.county_id, visit_logs: c.visit_logs || [] };
-        });
-      } catch (e) {
-        return parkCfg.clients.map(c => ({ ...c, park_id: pid, county_id: parkCfg.county_id, visit_logs: c.visit_logs || [] }));
-      }
-    }
-
-    // Save client changes back to appropriate park's localStorage
-    function saveCurrentParkData() {
-      if (currentPark.startsWith("all_") || currentPark === "all_taiwan") {
-        const grouped = {};
-        clients.forEach(c => {
-          const pid = c.park_id || currentPark;
-          if (!grouped[pid]) grouped[pid] = [];
-          grouped[pid].push(c);
-        });
-        Object.keys(grouped).forEach(pid => {
-          localStorage.setItem(getParkStorageKey(pid), JSON.stringify(grouped[pid]));
-        });
-      } else {
-        localStorage.setItem(getParkStorageKey(currentPark), JSON.stringify(clients));
-      }
-    }
 
     // 18 縣市依地理動線排列（基隆至屏東，再至宜蘭、花蓮、台東）
     const ALL_COUNTY_KEYS = [
@@ -2366,7 +2289,7 @@ html_template = '''<!DOCTYPE html>
         toast.className = 'toast-notice';
         document.body.appendChild(toast);
       }
-      toast.innerHTML = msg;
+      toast.textContent = msg;
       toast.classList.add('show');
       if (window._toastTimer) clearTimeout(window._toastTimer);
       window._toastTimer = setTimeout(() => {
@@ -2390,7 +2313,7 @@ html_template = '''<!DOCTYPE html>
       const modal = document.getElementById('modalDefaultCounty');
       if (!modal) return;
 
-      const saved = localStorage.getItem(DEFAULT_COUNTY_KEY) || currentCounty || "taoyuan";
+      const saved = appStorage.getItem(DEFAULT_COUNTY_KEY) || currentCounty || "taoyuan";
       modalSelectedCounty = saved;
 
       const titleEl = document.getElementById('defaultModalTitle');
@@ -2432,8 +2355,8 @@ html_template = '''<!DOCTYPE html>
     window.confirmDefaultCounty = function() {
       const remember = document.getElementById('chkRememberDefaultCounty')?.checked ?? true;
       if (remember) {
-        localStorage.setItem(DEFAULT_COUNTY_KEY, modalSelectedCounty);
-        localStorage.setItem(DEFAULT_PROMPTED_KEY, "true");
+        appStorage.setItem(DEFAULT_COUNTY_KEY, modalSelectedCounty);
+        appStorage.setItem(DEFAULT_PROMPTED_KEY, "true");
       }
       switchCounty(modalSelectedCounty);
       updateDefaultCountyHeaderUI(modalSelectedCounty);
@@ -2445,7 +2368,7 @@ html_template = '''<!DOCTYPE html>
     };
 
     window.skipDefaultCountyModal = function() {
-      localStorage.setItem(DEFAULT_PROMPTED_KEY, "true");
+      appStorage.setItem(DEFAULT_PROMPTED_KEY, "true");
       closeDefaultCountyModal();
       showToast("💡 您可隨時點擊頂部【⭐ 預設】按鈕重新設定常駐縣市！");
     };
@@ -2457,7 +2380,7 @@ html_template = '''<!DOCTYPE html>
         ALL_COUNTY_KEYS.forEach(cid => {
           if (!COUNTIES[cid]) return;
           const c = COUNTIES[cid];
-          const count = (c.parks || []).reduce((s, pid) => s + (PARKS[pid] ? PARKS[pid].clients.length : 0), 0);
+          const count = (c.parks || []).reduce((s, pid) => s + (PARKS[pid] ? PARKS[pid].count : 0), 0);
           const card = document.createElement('div');
           card.className = `county-select-card ${modalSelectedCounty === cid ? 'selected' : ''}`;
           card.onclick = () => selectDefaultCountyInModal(cid);
@@ -2476,7 +2399,7 @@ html_template = '''<!DOCTYPE html>
       const allGrid = document.getElementById('defaultCountyGridAll');
       if (allGrid) {
         allGrid.innerHTML = "";
-        const allTaiwanTotal = Object.values(PARKS).reduce((sum, p) => sum + p.clients.length, 0);
+        const allTaiwanTotal = Object.values(PARKS).reduce((sum, p) => sum + p.count, 0);
         const card = document.createElement('div');
         card.className = `county-select-card ${modalSelectedCounty === 'all' ? 'selected' : ''}`;
         card.onclick = () => selectDefaultCountyInModal('all');
@@ -2496,11 +2419,11 @@ html_template = '''<!DOCTYPE html>
       const textEl = document.getElementById('selectedCountyPreviewText');
       if (!textEl) return;
       if (modalSelectedCounty === 'all') {
-        const allTaiwanTotal = Object.values(PARKS).reduce((sum, p) => sum + p.clients.length, 0);
+        const allTaiwanTotal = Object.values(PARKS).reduce((sum, p) => sum + p.count, 0);
         textEl.innerText = `🌐 全台 72 大園區 (共 18 縣市 · ${allTaiwanTotal.toLocaleString()} 家廠商)`;
       } else if (COUNTIES[modalSelectedCounty]) {
         const c = COUNTIES[modalSelectedCounty];
-        const count = (c.parks || []).reduce((s, pid) => s + (PARKS[pid] ? PARKS[pid].clients.length : 0), 0);
+        const count = (c.parks || []).reduce((s, pid) => s + (PARKS[pid] ? PARKS[pid].count : 0), 0);
         textEl.innerText = `${c.icon} ${c.name} (共 ${(c.parks || []).length} 大園區 · ${count.toLocaleString()} 家廠商)`;
       }
     }
@@ -2509,13 +2432,13 @@ html_template = '''<!DOCTYPE html>
     function renderCountyNavBar() {
       const nav = document.getElementById('countyNavBar');
       nav.innerHTML = "";
-      const savedDefault = localStorage.getItem(DEFAULT_COUNTY_KEY) || "";
+      const savedDefault = appStorage.getItem(DEFAULT_COUNTY_KEY) || "";
 
       ALL_COUNTY_KEYS.forEach(cid => {
         if (!COUNTIES[cid]) return;
         const cinfo = COUNTIES[cid];
         const parkIds = cinfo.parks || [];
-        const totalCount = parkIds.reduce((sum, pid) => sum + (PARKS[pid] ? PARKS[pid].clients.length : 0), 0);
+        const totalCount = parkIds.reduce((sum, pid) => sum + (PARKS[pid] ? PARKS[pid].count : 0), 0);
         const isDefault = (cid === savedDefault);
 
         const btn = document.createElement('button');
@@ -2535,7 +2458,7 @@ html_template = '''<!DOCTYPE html>
       sep.className = 'region-separator';
       nav.appendChild(sep);
 
-      const allTaiwanTotal = Object.values(PARKS).reduce((sum, p) => sum + p.clients.length, 0);
+      const allTaiwanTotal = Object.values(PARKS).reduce((sum, p) => sum + p.count, 0);
       const isAllDefault = (savedDefault === 'all');
       const allBtn = document.createElement('button');
       allBtn.className = `county-pill ${currentCounty === 'all' ? 'active' : ''}`;
@@ -2563,13 +2486,13 @@ html_template = '''<!DOCTYPE html>
         parksToShow = Object.keys(PARKS);
         overviewPillTitle = "🌐 全台 72 大園區總覽";
         overviewPillId = "all_taiwan";
-        overviewCount = parksToShow.reduce((s, pid) => s + PARKS[pid].clients.length, 0);
+        overviewCount = parksToShow.reduce((s, pid) => s + PARKS[pid].count, 0);
       } else {
         const cinfo = COUNTIES[currentCounty];
         parksToShow = cinfo.parks || [];
         overviewPillTitle = `🌐 全${cinfo.name} ${parksToShow.length} 大園區總覽`;
         overviewPillId = `all_${currentCounty}`;
-        overviewCount = parksToShow.reduce((s, pid) => s + (PARKS[pid] ? PARKS[pid].clients.length : 0), 0);
+        overviewCount = parksToShow.reduce((s, pid) => s + (PARKS[pid] ? PARKS[pid].count : 0), 0);
       }
 
       parksToShow.forEach(pid => {
@@ -2581,7 +2504,7 @@ html_template = '''<!DOCTYPE html>
         btn.setAttribute('data-park', pid);
         btn.innerHTML = `
           <span>📍 ${pcfg.name}</span>
-          <span class="park-pill-count">${pcfg.clients.length} 家</span>
+          <span class="park-pill-count">${pcfg.count} 家</span>
         `;
         btn.onclick = () => switchPark(pid);
         nav.appendChild(btn);
@@ -2616,7 +2539,19 @@ html_template = '''<!DOCTYPE html>
     };
 
     // --- Switch Park ---
-    window.switchPark = function(parkId, newSearchTerm) {
+    window.switchPark = async function(parkId, newSearchTerm) {
+      const sequence=++parkLoadSequence;
+      const list=document.getElementById('clientList');
+      list.textContent='載入園區名冊中…';
+      document.getElementById('btnAddClient').disabled=true;
+      document.getElementById('btnImport').disabled=true;
+      try { await ensureParkData(parkId); } catch(e) {
+        if(sequence!==parkLoadSequence)return;
+        list.textContent=e.message+'。請重新點選園區重試。'; return;
+      }
+      if(sequence!==parkLoadSequence)return;
+      document.getElementById('btnAddClient').disabled=false;
+      document.getElementById('btnImport').disabled=false;
       currentPark = parkId;
 
       document.querySelectorAll('#parkNavBar .park-pill').forEach(pill => {
@@ -2636,7 +2571,7 @@ html_template = '''<!DOCTYPE html>
         if (clearBtn) clearBtn.style.display = newSearchTerm ? 'block' : 'none';
       }
 
-      loadParkData(parkId);
+      try { loadParkData(parkId); } catch(e) { storageFailure(e); }
     };
 
     // Load Data for current park
@@ -2664,7 +2599,7 @@ html_template = '''<!DOCTYPE html>
         const pcfg = PARKS[parkId];
         const countyName = COUNTIES[pcfg.county_id] ? COUNTIES[pcfg.county_id].name : '';
         document.getElementById('headerTitle').innerText = `全台科技＆產業園區地圖 · ${pcfg.name}`;
-        document.getElementById('headerSubtitle').innerText = `${countyName} · ${pcfg.name} · ${pcfg.clients.length} 家廠商全區地圖（支援上市櫃、產業、同路巡訪快篩）`;
+        document.getElementById('headerSubtitle').innerText = `${countyName} · ${pcfg.name} · ${pcfg.count} 家廠商全區地圖（支援上市櫃、產業、同路巡訪快篩）`;
       }
 
       clients = baseClients;
@@ -2752,7 +2687,7 @@ html_template = '''<!DOCTYPE html>
 
       map.on('zoomend', updateMapLabelVisibility);
       map.on('zoom', updateMapLabelVisibility);
-      map.on('moveend', updateMapLabelVisibility);
+      map.on('moveend', () => { updateMapLabelVisibility(); updateMarkersDebounced(currentFiltered); });
     }
 
     // --- Debounced Marker Rendering for 60fps Performance ---
@@ -2770,7 +2705,23 @@ html_template = '''<!DOCTYPE html>
 
       const bounds = L.latLngBounds();
 
-      filteredClients.forEach(c => {
+      const visible=filteredClients.filter(c=>validCoordinates(c) && map.getBounds().pad(0.15).contains([c.lat,c.lng]));
+      const cells=new Map();
+      for(const c of visible) {
+        const point=map.latLngToContainerPoint([c.lat,c.lng]);
+        const key=Math.floor(point.x/48)+':'+Math.floor(point.y/48);
+        if(!cells.has(key))cells.set(key,[]);
+        cells.get(key).push(c);
+      }
+      const singles=[];
+      for(const [key,group] of cells) {
+        if(group.length===1 || map.getZoom()>=18) { singles.push(...group.slice(0,300-singles.length)); continue; }
+        const lat=group.reduce((s,c)=>s+c.lat,0)/group.length,lng=group.reduce((s,c)=>s+c.lng,0)/group.length;
+        const cluster=L.marker([lat,lng],{icon:L.divIcon({className:'',html:'<div style="background:#1a4da1;color:white;border-radius:50%;width:38px;height:38px;display:grid;place-items:center;font-weight:700">'+group.length+'</div>',iconSize:[38,38]})}).addTo(map);
+        cluster.on('click',()=>map.setView([lat,lng],map.getZoom()+2));
+        markers['cluster_'+key]=cluster;
+      }
+      singles.forEach(c => {
         let markerClass = "marker-pending";
         if (c.status === "已拜訪") markerClass = "marker-done";
         else if (c.status === "洽談中") markerClass = "marker-negotiating";
@@ -2806,14 +2757,14 @@ html_template = '''<!DOCTYPE html>
 
         const tooltipContent = `
           <div class="lbl-title">
-            <span>${c.name}</span>
+            <span>${escapeHtml(c.name)}</span>
             ${c.is_listed === '是' ? '<span class="lbl-star">⭐上市</span>' : ''}
             ${statusBadge}
           </div>
           <div class="lbl-detail">
-            <span>📍 ${c.road}</span>
+            <span>📍 ${escapeHtml(c.road)}</span>
             <span>·</span>
-            <span>${c.industry}</span>
+            <span>${escapeHtml(c.industry)}</span>
           </div>
         `;
 
@@ -2838,17 +2789,17 @@ html_template = '''<!DOCTYPE html>
         const popupContent = `
           <div style="font-family:'Noto Sans TC',sans-serif; min-width:230px; padding:2px;">
             <div style="font-weight:800; font-size:14px; color:#16213A; margin-bottom:3px; line-height:1.3;">
-              ${c.name}
+              ${escapeHtml(c.name)}
             </div>
             <div style="font-size:11px; color:#68717F; margin-bottom:6px;">
-              ${c.address}
+              ${escapeHtml(c.address)}
             </div>
             <div style="display:flex; gap:5px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
               ${parkName ? `<span style="font-size:10.5px; font-weight:800; color:#16213A; background:#E5E7EB; padding:1px 5px; border-radius:4px;">${parkName}</span>` : ''}
-              <span style="font-size:11px; font-weight:700; color:#1A4DA1; background:#EEF3FC; padding:2px 6px; border-radius:4px;">${c.road}</span>
-              <span style="font-size:11px; color:#68717F;">${c.industry}</span>
+              <span style="font-size:11px; font-weight:700; color:#1A4DA1; background:#EEF3FC; padding:2px 6px; border-radius:4px;">${escapeHtml(c.road)}</span>
+              <span style="font-size:11px; color:#68717F;">${escapeHtml(c.industry)}</span>
             </div>
-            ${c.notes ? `<div style="font-size:11px; background:#F8FAFC; border:1px solid #E2E8F0; padding:4px 6px; border-radius:4px; margin-bottom:8px; color:#334155;">📝 <strong>備忘：</strong>${c.notes}</div>` : ''}
+            ${c.notes ? `<div style="font-size:11px; background:#F8FAFC; border:1px solid #E2E8F0; padding:4px 6px; border-radius:4px; margin-bottom:8px; color:#334155;">📝 <strong>備忘：</strong>${escapeHtml(c.notes)}</div>` : ''}
             <div style="display:flex; gap:5px; align-items:center; padding-top:8px; border-top:1px dashed #E6E3DB;">
               <button onclick="quickToggleVisit(${c.id})" 
                       style="flex:1; border:1px solid ${isDone ? '#2E8540' : '#1A4DA1'}; background:${isDone ? '#EBF7EE' : '#1A4DA1'}; color:${isDone ? '#2E8540' : '#FFFFFF'}; padding:6px 6px; border-radius:6px; font-weight:800; font-size:11px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:2px;">
@@ -2859,7 +2810,7 @@ html_template = '''<!DOCTYPE html>
                 📋 紀錄${logCount > 0 ? ` (${logCount})` : ''}
               </button>
               <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}" 
-                 target="_blank" 
+                 target="_blank" rel="noopener noreferrer"
                  style="font-size:11px; background:#E0622B; color:#fff; text-decoration:none; padding:6px 8px; border-radius:6px; font-weight:800; white-space:nowrap;">
                  🚗 導航
               </a>
@@ -2875,11 +2826,6 @@ html_template = '''<!DOCTYPE html>
         markers[c.id] = marker;
         bounds.extend([c.lat, c.lng]);
       });
-
-      // Fit map if moderate number of markers
-      if (filteredClients.length > 0 && bounds.isValid() && filteredClients.length <= 150) {
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-      }
 
       // 每次更新標記後同步刷新標籤可視性
       updateMapLabelVisibility();
@@ -2973,8 +2919,8 @@ html_template = '''<!DOCTYPE html>
           if (relaxedMatches.length > 0 && (activeRoad !== 'ALL' || activeIndustry !== 'ALL' || activeStatus !== 'ALL')) {
             noticeHtml = `
               <div style="background:#FFFBEB; border:1px solid #FCD34D; padding:12px; border-radius:8px; margin-bottom:12px; text-align:left; font-size:12.5px; color:#92400E;">
-                💡 <strong>提示：</strong>目前已啟用【${activeRoad !== 'ALL' ? activeRoad : ''} ${activeIndustry !== 'ALL' ? activeIndustry : ''} ${activeStatus !== 'ALL' ? activeStatus : ''}】篩選條件。<br>
-                在當前園區中共找到 <strong>${relaxedMatches.length}</strong> 家廠商符合「${q}」！<br>
+                💡 <strong>提示：</strong>目前已啟用【${escapeHtml(activeRoad !== 'ALL' ? activeRoad : '')} ${escapeHtml(activeIndustry !== 'ALL' ? activeIndustry : '')} ${escapeHtml(activeStatus !== 'ALL' ? activeStatus : '')}】篩選條件。<br>
+                在當前園區中共找到 <strong>${relaxedMatches.length}</strong> 家廠商符合「${escapeHtml(q)}」！<br>
                 <button onclick="clearAllFiltersAndSearch()" class="btn btn-primary" style="margin-top:8px; font-size:12px; padding:4px 10px;">
                   🔓 解除標籤限制，顯示這 ${relaxedMatches.length} 家
                 </button>
@@ -3019,13 +2965,13 @@ html_template = '''<!DOCTYPE html>
           visitLogBoxHtml = `
             <div class="card-visit-box" onclick="openVisitLogModal(${c.id}, event)" title="點擊檢視或新增歷史拜訪紀錄">
               <div class="card-visit-header">
-                <span>📅 最近拜訪：${latestLog.date ? latestLog.date.replace('T', ' ') : ''} · ${latestLog.contact || '洽談'}</span>
-                <span class="badge-outcome">${latestLog.outcome || '已拜訪'}</span>
+                <span>📅 最近拜訪：${escapeHtml(latestLog.date ? latestLog.date.replace('T', ' ') : '')} · ${escapeHtml(latestLog.contact || '洽談')}</span>
+                <span class="badge-outcome">${escapeHtml(latestLog.outcome || '已拜訪')}</span>
               </div>
               <div class="card-visit-summary">
-                💬 <strong>內容：</strong>${latestLog.summary}
+                💬 <strong>內容：</strong>${escapeHtml(latestLog.summary)}
               </div>
-              ${latestLog.next_action ? `<div class="card-visit-next">⏰ <strong>下次待辦：</strong>${latestLog.next_action}</div>` : ''}
+              ${latestLog.next_action ? `<div class="card-visit-next">⏰ <strong>下次待辦：</strong>${escapeHtml(latestLog.next_action)}</div>` : ''}
             </div>
           `;
         }
@@ -3034,25 +2980,25 @@ html_template = '''<!DOCTYPE html>
 
         card.innerHTML = `
           <div class="card-top">
-            <div class="card-title">${c.name}</div>
+            <div class="card-title">${escapeHtml(c.name)}</div>
             ${c.is_listed === '是' ? '<span class="badge-listed">★ 上市櫃</span>' : ''}
           </div>
 
           <div class="card-address">
             ${parkName && (currentPark.startsWith('all_') || currentPark === 'all_taiwan') ? `<span style="font-size:10.5px; font-weight:800; color:#1F2937; background:#E5E7EB; padding:1px 5px; border-radius:4px;">${parkName}</span>` : ''}
-            <span class="card-road">${c.road}</span>
-            <span>${c.address}</span>
+            <span class="card-road">${escapeHtml(c.road)}</span>
+            <span>${escapeHtml(c.address)}</span>
           </div>
 
           <div class="card-meta">
-            <span>👤 ${c.contact || '總機/廠務'}</span>
-            ${c.phone ? `<span>📞 <a href="tel:${c.phone}">${c.phone}</a></span>` : ''}
-            <span class="badge-industry">${c.industry}</span>
+            <span>👤 ${escapeHtml(c.contact || '總機/廠務')}</span>
+            ${c.phone ? `<span>📞 <a href="tel:${escapeHtml(c.phone)}">${escapeHtml(c.phone)}</a></span>` : ''}
+            <span class="badge-industry">${escapeHtml(c.industry)}</span>
           </div>
 
           ${c.notes && !latestLog ? `
             <div class="card-notes" title="點擊卡片可查看地圖位置">
-              📝 <strong>備忘：</strong><span id="note-text-${c.id}">${c.notes}</span>
+              📝 <strong>備忘：</strong><span id="note-text-${c.id}">${escapeHtml(c.notes)}</span>
             </div>
           ` : ''}
 
@@ -3072,7 +3018,7 @@ html_template = '''<!DOCTYPE html>
                 📋 拜訪紀錄${logs.length > 0 ? ` (${logs.length})` : ''}
               </button>
               <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(c.address)}" 
-                 target="_blank" 
+                 target="_blank" rel="noopener noreferrer"
                  class="nav-btn" 
                  onclick="event.stopPropagation();" 
                  title="開啓 Google Maps 導航">
@@ -3102,13 +3048,13 @@ html_template = '''<!DOCTYPE html>
         footerCard.innerHTML = `
           <div style="font-weight:800; color:#334155; margin-bottom:3px; display:flex; align-items:center; justify-content:center; gap:5px;">
             <span class="status-pulse-dot"></span>
-            <span>最新更新：2026年10月15日 · 每月1號定時自動同步</span>
+            <span>既有名冊待核對 · 尚無官方同步紀錄</span>
           </div>
           <div style="font-size:11px; color:#64748B; margin-bottom:6px;">
-            整合經濟部工廠登記、國科會科學園區、各縣市開放資料與上市櫃名錄
+            地址、電話與上市櫃狀態請先核對官方來源
           </div>
           <button type="button" class="btn-source-pill" onclick="openSourceModal()" style="margin:0 auto;">
-            🏛️ 查看完整 6 大官方資料來源與規範 ➔
+            🏛️ 查看資料來源與核對狀態 ➔
           </button>
         `;
         container.appendChild(footerCard);
@@ -3124,10 +3070,9 @@ html_template = '''<!DOCTYPE html>
         setMobileView('split');
       }
 
-      if (markers[c.id]) {
-        map.flyTo([c.lat, c.lng], 17, { duration: 1 });
-        markers[c.id].openPopup();
-      }
+      if (!validCoordinates(c)) { showToast('此客戶尚未定位，請核對地址後填入座標'); return; }
+      map.flyTo([c.lat, c.lng],18,{duration:0.5});
+      map.once('moveend',()=>{updateMarkers(currentFiltered);markers[c.id]?.openPopup();});
     }
 
     function highlightClientCard(id) {
@@ -3145,7 +3090,7 @@ html_template = '''<!DOCTYPE html>
       if (client) {
         const wasDone = client.status === '已拜訪';
         client.status = wasDone ? '尚未拜訪' : '已拜訪';
-        saveCurrentParkData();
+        if (!saveCurrentParkData()) return;
         renderList();
         if (markers[id]) {
           markers[id].openPopup();
@@ -3162,7 +3107,7 @@ html_template = '''<!DOCTYPE html>
       const client = clients.find(c => c.id === id);
       if (client) {
         client.status = newStatus;
-        saveCurrentParkData();
+        if (!saveCurrentParkData()) return;
         renderList();
         if (newStatus === "已拜訪") {
           openVisitLogModal(id);
@@ -3215,19 +3160,19 @@ html_template = '''<!DOCTYPE html>
         itemCard.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
             <div style="font-size:12px; font-weight:800; color:var(--navy);">
-              📅 ${item.date ? item.date.replace('T', ' ') : ''} · 👤 ${item.contact || '現場窗口'}
+              📅 ${escapeHtml(item.date ? item.date.replace('T', ' ') : '')} · 👤 ${escapeHtml(item.contact || '現場窗口')}
             </div>
             <div style="display:flex; gap:6px; align-items:center;">
-              <span class="badge-outcome">${item.outcome || '洽談紀錄'}</span>
+              <span class="badge-outcome">${escapeHtml(item.outcome || '洽談紀錄')}</span>
               <button onclick="deleteVisitLog(${client.id}, '${item.id}')" style="background:none; border:none; color:#EF4444; font-size:11px; cursor:pointer;" title="刪除此筆紀錄">🗑️</button>
             </div>
           </div>
           <div style="font-size:12px; color:#374151; line-height:1.4; white-space:pre-wrap; margin-bottom:4px;">
-            ${item.summary}
+            ${escapeHtml(item.summary)}
           </div>
           ${item.next_action ? `
             <div style="font-size:11px; color:#059669; font-weight:700;">
-              ⏰ 下次待辦：${item.next_action}
+              ⏰ 下次待辦：${escapeHtml(item.next_action)}
             </div>
           ` : ''}
         `;
@@ -3245,7 +3190,7 @@ html_template = '''<!DOCTYPE html>
       } else {
         client.notes = "";
       }
-      saveCurrentParkData();
+      if (!saveCurrentParkData()) return;
       renderVisitHistoryTimeline(client);
       renderList();
     };
@@ -3356,8 +3301,8 @@ html_template = '''<!DOCTYPE html>
       populateStageOptions();
 
       // 檢查是否已設定預設常駐縣市
-      const savedDefault = localStorage.getItem(DEFAULT_COUNTY_KEY);
-      const hasPrompted = localStorage.getItem(DEFAULT_PROMPTED_KEY);
+      const savedDefault = appStorage.getItem(DEFAULT_COUNTY_KEY);
+      const hasPrompted = appStorage.getItem(DEFAULT_PROMPTED_KEY);
 
       if (savedDefault && (COUNTIES[savedDefault] || savedDefault === 'all')) {
         currentCounty = savedDefault;
@@ -3374,6 +3319,7 @@ html_template = '''<!DOCTYPE html>
       // 手機端視圖初始化：若寬度小於 768px 預設為上下分割
       if (window.innerWidth <= 768) {
         setMobileView("split");
+        toggleMobileFilters();
       }
 
       // 若為第一次造訪（未設定預設縣市且尚未詢問過），主動彈出詢問視窗
@@ -3496,7 +3442,7 @@ html_template = '''<!DOCTYPE html>
         if (!client) return;
 
         const newLog = {
-          id: 'v_' + Date.now(),
+          id: 'v_' + crypto.randomUUID(),
           date: document.getElementById('logDate').value,
           contact: document.getElementById('logContact').value.trim(),
           outcome: document.getElementById('logOutcome').value,
@@ -3514,7 +3460,7 @@ html_template = '''<!DOCTYPE html>
           client.status = "已拜訪";
         }
 
-        saveCurrentParkData();
+        if (!saveCurrentParkData()) return;
         renderVisitHistoryTimeline(client);
         renderList();
 
@@ -3574,53 +3520,20 @@ html_template = '''<!DOCTYPE html>
 
       // Fit bounds
       document.getElementById('btnFitBounds').addEventListener('click', () => {
-        const bounds = L.latLngBounds(clients.map(c => [c.lat, c.lng]));
+        const bounds = L.latLngBounds(currentFiltered.filter(validCoordinates).map(c => [c.lat, c.lng]));
         if (bounds.isValid()) {
           map.fitBounds(bounds, { padding: [50, 50] });
         }
       });
 
-      // Export CSV (含縣市、園區、外勤拜訪紀錄與下次待辦，繁體中文欄位表頭)
+      // CSV is a human-readable summary; JSON backups preserve the full history.
       document.getElementById('btnExport').addEventListener('click', () => {
-        let csvContent = "\\uFEFF客戶編號,縣市,工業或科技園區,公司名稱,所在路段,完整廠址,緯度(Lat),經度(Lng),產業類別,是否上市櫃,拜訪狀態,聯絡窗口,聯絡電話,拜訪備忘與筆記,累計拜訪次數,最新拜訪日期,最新接洽對象,最新洽談階段,最新洽談重點,下次預計待辦事項與回訪日\\n";
-        clients.forEach(c => {
-          const logs = c.visit_logs || [];
-          const latest = logs.length > 0 ? logs[0] : {};
-          const pcfg = (c.park_id && PARKS[c.park_id]) ? PARKS[c.park_id] : {};
-          const cinfo = (pcfg.county_id && COUNTIES[pcfg.county_id]) ? COUNTIES[pcfg.county_id] : {};
-          const row = [
-            c.id,
-            `"${(cinfo.name || c.county_id || '').replace(/"/g, '""')}"`,
-            `"${(pcfg.name || c.park_id || '').replace(/"/g, '""')}"`,
-            `"${(c.name || '').replace(/"/g, '""')}"`,
-            `"${(c.road || '').replace(/"/g, '""')}"`,
-            `"${(c.address || '').replace(/"/g, '""')}"`,
-            c.lat,
-            c.lng,
-            `"${(c.industry || '').replace(/"/g, '""')}"`,
-            c.is_listed || "否",
-            `"${(c.status || '尚未拜訪')}"`,
-            `"${(c.contact || '').replace(/"/g, '""')}"`,
-            `"${(c.phone || '').replace(/"/g, '""')}"`,
-            `"${(c.notes || '').replace(/"/g, '""')}"`,
-            logs.length,
-            `"${(latest.date || '').replace('T', ' ')}"`,
-            `"${(latest.contact || '').replace(/"/g, '""')}"`,
-            `"${(latest.outcome || '').replace(/"/g, '""')}"`,
-            `"${(latest.summary || '').replace(/"/g, '""')}"`,
-            `"${(latest.next_action || '').replace(/"/g, '""')}"`
-          ].join(",");
-          csvContent += row + "\\n";
-        });
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        const parkName = PARKS[currentPark] ? PARKS[currentPark].name : currentPark;
-        a.download = `全台科技園區_${parkName}_業務拜訪與洽談紀錄_${new Date().toISOString().slice(0,10)}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const rows=[['客戶編號','縣市','工業或科技園區','公司名稱','所在路段','完整廠址','緯度(Lat)','經度(Lng)','產業類別','是否上市櫃','拜訪狀態','聯絡窗口','聯絡電話','拜訪備忘與筆記','累計拜訪次數','最新拜訪日期','最新接洽對象','最新洽談階段','最新洽談重點','下次預計待辦事項與回訪日']];
+        for(const c of clients) {
+          const latest=c.visit_logs[0] || {};
+          rows.push([c.id,COUNTIES[c.county_id]?.name,PARKS[c.park_id]?.name,c.name,c.road,c.address,c.lat,c.lng,c.industry,c.is_listed,c.status,c.contact,c.phone,c.notes,c.visit_logs.length,latest.date,latest.contact,latest.outcome,latest.summary,latest.next_action]);
+        }
+        downloadFile('巡訪摘要_'+Date.now()+'.csv',String.fromCharCode(0xfeff)+rows.map(row=>row.map(csvCell).join(',')).join(String.fromCharCode(13,10)),'text/csv;charset=utf-8');
       });
 
       // Import CSV
@@ -3629,21 +3542,10 @@ html_template = '''<!DOCTYPE html>
         fileInput.click();
       });
 
-      fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          const text = evt.target.result;
-          parseAndImportCSV(text);
-        };
-        reader.readAsText(file);
-      });
-
       // Modal Add Client
       const modal = document.getElementById('modalAdd');
       document.getElementById('btnAddClient').addEventListener('click', () => {
+        if (!PARKS[currentPark]) { alert('請先選擇單一園區，再新增客戶'); return; }
         modal.classList.add('open');
       });
       document.getElementById('btnCloseModal').addEventListener('click', () => {
@@ -3674,16 +3576,18 @@ html_template = '''<!DOCTYPE html>
 
       document.getElementById('formAddClient').addEventListener('submit', (e) => {
         e.preventDefault();
-        const center = (PARKS[currentPark] && PARKS[currentPark].center) || [25.0880, 121.7010];
+        const latText=document.getElementById('addLat').value.trim(),lngText=document.getElementById('addLng').value.trim();
+        const coords={lat:latText?Number(latText):null,lng:lngText?Number(lngText):null};
+        if((latText || lngText) && !validCoordinates(coords)){alert('請填寫有效的經緯度，或將兩欄留空');return;}
         const newClient = {
-          id: Date.now(),
+          id: nextClientId(),
           park_id: currentPark,
           county_id: currentCounty,
           name: document.getElementById('addName').value.trim(),
           road: document.getElementById('addRoad').value.trim(),
           address: document.getElementById('addAddress').value.trim(),
-          lat: parseFloat(document.getElementById('addLat').value) || center[0],
-          lng: parseFloat(document.getElementById('addLng').value) || center[1],
+          lat: coords.lat,
+          lng: coords.lng,
           industry: "自建客戶",
           is_listed: document.getElementById('addListed').value,
           status: "尚未拜訪",
@@ -3693,9 +3597,10 @@ html_template = '''<!DOCTYPE html>
           visit_logs: []
         };
 
-        clients.unshift(newClient);
-        saveCurrentParkData();
+        clients.unshift(normalizeClient(newClient,currentPark,currentCounty));
+        if (!saveCurrentParkData()) return;
         setupRoadChips();
+        setupIndustryChips();
         renderList();
         modal.classList.remove('open');
         document.getElementById('formAddClient').reset();
@@ -3703,104 +3608,6 @@ html_template = '''<!DOCTYPE html>
       });
     });
 
-    // Helper: Parse CSV (支援中文欄位與英文欄位雙向相容、引號與 BOM 解析)
-    function parseAndImportCSV(csvText) {
-      const lines = csvText.split(/\\r?\\n/).filter(line => line.trim() !== "");
-      if (lines.length <= 1) {
-        alert("CSV 內容為空或格式不符");
-        return;
-      }
-
-      function parseCSVLine(line) {
-        const result = [];
-        let cur = '';
-        let inQuotes = false;
-        for (let i = 0; i < line.length; i++) {
-          const char = line[i];
-          if (char === '"') {
-            if (inQuotes && line[i + 1] === '"') {
-              cur += '"';
-              i++;
-            } else {
-              inQuotes = !inQuotes;
-            }
-          } else if (char === ',' && !inQuotes) {
-            result.push(cur.trim());
-            cur = '';
-          } else {
-            cur += char;
-          }
-        }
-        result.push(cur.trim());
-        return result;
-      }
-
-      const headers = parseCSVLine(lines[0].replace(/^\\uFEFF/, '')).map(h => h.trim().replace(/^"|"$/g, ''));
-      const colMap = {};
-      headers.forEach((h, idx) => {
-        colMap[h] = idx;
-      });
-
-      const getVal = (row, ...keys) => {
-        for (const k of keys) {
-          if (colMap[k] !== undefined && row[colMap[k]] !== undefined) {
-            return row[colMap[k]];
-          }
-        }
-        return '';
-      };
-
-      const imported = [];
-
-      for (let i = 1; i < lines.length; i++) {
-        const row = parseCSVLine(lines[i]);
-        if (row.length < 3) continue;
-
-        const name = getVal(row, '公司名稱', 'name') || (row.length > 3 ? row[3] : row[1]) || `客戶 ${i}`;
-        const road = getVal(row, '所在路段', 'road') || (row.length > 4 ? row[4] : row[2]) || '園區內';
-        const address = getVal(row, '完整廠址', 'address') || (row.length > 5 ? row[5] : row[3]) || '';
-        const latVal = parseFloat(getVal(row, '緯度(Lat)', 'lat') || (row.length > 6 ? row[6] : row[4]));
-        const lngVal = parseFloat(getVal(row, '經度(Lng)', 'lng') || (row.length > 7 ? row[7] : row[5]));
-        const industry = getVal(row, '產業類別', 'industry') || (row.length > 8 ? row[8] : row[6]) || '其他';
-        const is_listed = getVal(row, '是否上市櫃', 'is_listed') || (row.length > 9 ? row[9] : row[7]) || '否';
-        const status = getVal(row, '拜訪狀態', 'status') || (row.length > 10 ? row[10] : row[8]) || '尚未拜訪';
-        const contact = getVal(row, '聯絡窗口', 'contact') || (row.length > 11 ? row[11] : row[9]) || '';
-        const phone = getVal(row, '聯絡電話', 'phone') || (row.length > 12 ? row[12] : row[10]) || '';
-        const notes = getVal(row, '拜訪備忘與筆記', 'notes') || (row.length > 13 ? row[13] : row[11]) || '';
-
-        imported.push({
-          id: Date.now() + i,
-          park_id: currentPark,
-          county_id: currentCounty,
-          name: name,
-          road: road,
-          address: address,
-          lat: !isNaN(latVal) && latVal > 0 ? latVal : (PARKS[currentPark] ? PARKS[currentPark].lat : 24.97),
-          lng: !isNaN(lngVal) && lngVal > 0 ? lngVal : (PARKS[currentPark] ? PARKS[currentPark].lng : 121.23),
-          industry: industry,
-          is_listed: is_listed,
-          status: status,
-          contact: contact,
-          phone: phone,
-          notes: notes,
-          visit_logs: []
-        });
-      }
-
-      if (imported.length > 0) {
-        if (confirm(`成功解析出 ${imported.length} 筆客戶名單！是否要覆蓋目前名單？（選取消則為追加名單）`)) {
-          clients = imported;
-        } else {
-          clients = [...imported, ...clients];
-        }
-        saveCurrentParkData();
-        setupRoadChips();
-        renderList();
-        alert("名單匯入成功！");
-      } else {
-        alert("解析 CSV 失敗，請確認欄位格式是否包含公司名稱、地址等欄位。");
-      }
-    }
   </script>
 </body>
 </html>
