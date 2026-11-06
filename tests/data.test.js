@@ -1,6 +1,12 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const d=require('../data-tools');
+test('vendored Leaflet bytes match published subresource integrity hashes',()=>{
+  const fs=require('fs'),crypto=require('crypto');
+  for(const [file,hash] of [['leaflet.css','p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='],['leaflet.js','20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=']]) {
+    assert.equal(crypto.createHash('sha256').update(fs.readFileSync('vendor/leaflet/'+file)).digest('base64'),hash);
+  }
+});
 test('quoted multiline CSV preserves quotes, commas, BOM and CRLF',()=>{
   assert.deepEqual(d.parseCSV('\ufeffname,notes\r\n"客戶","第一行\r\n第二行,""好"""\r\n'),[['name','notes'],['客戶','第一行\r\n第二行,"好"']]);
   assert.throws(()=>d.parseCSV('name,notes\na,"broken'));

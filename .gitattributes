@@ -1,0 +1,3 @@
+# Preserve upstream bytes: SRI hashes include line endings.
+vendor/leaflet/* -text
+vendor/leaflet/images/* -text

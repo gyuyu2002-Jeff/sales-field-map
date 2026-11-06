@@ -6,6 +6,8 @@ async function start(page){
   await page.addInitScript(()=>localStorage.setItem('sales_map_default_county_prompted','true'));
   await page.goto('/');
   await expect(page.locator('.client-card').first()).toBeVisible();
+  await expect(page.locator('.leaflet-map-pane')).toHaveCSS('position','absolute');
+  await expect(page.locator('.leaflet-control-zoom')).toBeVisible();
 }
 test('startup loads one dataset, mobile width and list remain usable',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
