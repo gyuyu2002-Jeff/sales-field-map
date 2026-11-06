@@ -1604,13 +1604,13 @@ html_template = '''<!DOCTYPE html>
     }
     @media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; animation:none !important; transition:none !important; } }
   </style>
-  <link rel="stylesheet" href="ui.css?v=2">
+  <link rel="stylesheet" href="ui.css?v=3">
 </head>
 <body>
 
   <!-- Top Header Navigation -->
   <header>
-    <div class="brand"><div class="brand-logo" aria-hidden="true">巡</div><div class="workspace-title">巡訪工作台</div></div>
+    <div class="brand"><div class="brand-logo" aria-hidden="true">巡</div><div class="workspace-title"><span>全台科技＆</span><span>產業園區地圖</span></div></div>
     <div id="headerTitle" hidden></div><div id="headerSubtitle" hidden></div>
     <button class="btn region-button" onclick="openRegionPicker()" aria-haspopup="dialog"><span id="regionLabel">桃園市 › 中壢產業園區</span><span aria-hidden="true">⌄</span></button>
     <div class="header-actions">
