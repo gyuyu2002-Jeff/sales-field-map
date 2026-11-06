@@ -4,3 +4,8 @@ __pycache__/
 dump.html
 test_check.js
 test_script.js
+
+node_modules/
+test-results/
+playwright-report/
+regression.log

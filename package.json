@@ -1,0 +1,15 @@
+{
+  "name": "sales-field-map",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/data.test.js && playwright test",
+    "build": "python build_index_html.py"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0"
+  },
+  "dependencies": {
+    "leaflet": "1.9.4"
+  }
+}
