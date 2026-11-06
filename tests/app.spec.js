@@ -1,5 +1,6 @@
 const {test,expect}=require('@playwright/test');
 async function start(page){
+  page.on('pageerror',e=>{throw e;});
   // Functional tests must not depend on external font/tile server latency.
   await page.route('https://**/*',r=>r.abort());
   page.on('dialog',d=>d.accept());
@@ -7,7 +8,7 @@ async function start(page){
   await page.goto('/');
   await expect(page.locator('.client-card').first()).toBeVisible();
   await expect(page.locator('.leaflet-map-pane')).toHaveCSS('position','absolute');
-  await expect(page.locator('.leaflet-control-zoom')).toBeVisible();
+  if(page.viewportSize().width>768)await expect(page.locator('.leaflet-control-zoom')).toBeVisible();
 }
 test('startup loads one dataset, mobile width and list remain usable',async({page})=>{
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -20,6 +21,67 @@ test('startup loads one dataset, mobile width and list remain usable',async({pag
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
   await page.screenshot({path:'test-results/mobile.png'});
   expect(errors).toEqual([]);
+});
+
+test('region picker supports search, county selection and keyboard dismissal',async({page})=>{
+  await page.setViewportSize({width:1440,height:900});await start(page);
+  expect((await page.locator('#clientList').boundingBox()).height).toBeGreaterThan(350);
+  await page.screenshot({path:'test-results/desktop.png'});
+  await page.locator('.region-button').click();
+  await expect(page.locator('#regionSearch')).toBeFocused();
+  await page.locator('#regionSearch').fill('龜山');
+  await page.locator('#regionResults button').first().click();
+  await expect(page.locator('#regionLabel')).toContainText('龜山');
+  expect(await page.evaluate(()=>currentPark)).toBe('guishan');
+  await page.locator('.region-button').click();
+  await page.locator('#regionCounty').selectOption('hsinchu_city');
+  await page.locator('#regionApply').click();
+  await expect(page.locator('#regionLabel')).toContainText('新竹');
+  expect(await page.evaluate(()=>currentPark)).toBe('all_hsinchu_city');
+  await page.locator('.region-button').click();await page.keyboard.press('Escape');
+  await expect(page.locator('#modalRegion')).toBeHidden();
+  await expect(page.locator('.region-button')).toBeFocused();
+});
+
+test('compact mobile controls remain usable and details do not trigger map navigation',async({page})=>{
+  // Dataset completion after layout settles must work with the map initially hidden.
+  await page.route('**/data/*.json',async route=>{await new Promise(resolve=>setTimeout(resolve,350));await route.continue();});
+  await page.setViewportSize({width:360,height:780});await start(page);
+  const card=page.locator('#clientList .client-card').first();
+  await card.locator('summary').click();
+  await expect(card.locator('.card-meta')).toBeVisible();
+  expect(await page.evaluate(()=>currentMobileView)).toBe('list');
+  await page.locator('#btnToggleFilters').click();
+  await expect(page.locator('#btnToggleFilters')).toHaveAttribute('aria-expanded','true');
+  await expect(page.locator('#collapsibleFilterSection')).toBeVisible();
+  await page.locator('#btnToggleFilters').click();
+  await page.locator('#moreTools > summary').click();
+  await expect(page.locator('#btnImport')).toBeVisible();
+  await expect(page.locator('#headerDefaultCountyLabel')).toBeVisible();
+  await page.keyboard.press('Escape');await expect(page.locator('#btnImport')).toBeHidden();
+  await card.locator('.card-title').click();
+  await expect(page.locator('#mapClientPanel')).toBeVisible();
+  await expect(page.locator('.leaflet-control-zoom')).toBeVisible();
+  await expect(page.locator('.leaflet-tooltip-pane')).toBeHidden();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  await page.screenshot({path:'test-results/mobile-map.png'});
+  await page.locator('#btnViewList').click();await expect(page.locator('#mapClientPanel')).toBeHidden();
+});
+
+test('mobile map can show a client beyond lazy list and keep status and visit actions working',async({page})=>{
+  await page.setViewportSize({width:390,height:844});await start(page);
+  const client=await page.evaluate(()=>clients[80]);
+  await expect(page.locator('#clientList #card-'+client.id)).toHaveCount(0);
+  await page.locator('#btnViewMap').click();
+  await page.evaluate(id=>highlightClientCard(id),client.id);
+  await expect(page.locator('#mapClientContent .card-title')).toHaveText(client.name);
+  await page.locator('#mapClientContent .status-select').selectOption('洽談中');
+  await expect(page.locator('#mapClientContent .status-select')).toHaveValue('洽談中');
+  expect(await page.evaluate(id=>clients.find(c=>c.id===id).status,client.id)).toBe('洽談中');
+  await page.locator('#mapClientContent .btn-log').click();
+  await expect(page.locator('#visitModalTitle')).toHaveText(client.name);
+  await page.keyboard.press('Escape');
+  await page.locator('.sheet-close').click();await expect(page.locator('#mapClientPanel')).toBeHidden();
 });
 test('custom client and all logs survive reload; unsafe text never becomes HTML',async({page})=>{
   await start(page);
@@ -57,6 +119,7 @@ test('CSV cancel is inert, append and replacement survive reload, invalid input 
 test('JSON backup round-trip restores custom clients, histories and settings',async({page})=>{
   await start(page);
   await page.evaluate(()=>{clients[0].visit_logs=[{id:'v_test',date:'2026-11-06',summary:'完整紀錄',contact:'測試',next_action:'再訪'}];clients.push(normalizeClient({id:99999999,name:'備份客戶'},currentPark,currentCounty));saveCurrentParkData();});
+  await page.locator('#moreTools > summary').click();
   const waiting=page.waitForEvent('download');await page.locator('#btnBackup').click();const download=await waiting;
   const buffer=require('fs').readFileSync(await download.path());
   await page.evaluate(()=>{localStorage.clear();localStorage.setItem('sales_map_default_county_prompted','true');});await page.reload();
