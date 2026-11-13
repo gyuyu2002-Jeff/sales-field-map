@@ -64,7 +64,27 @@
     if (/^[\s]*[=+@-]/.test(s) || /^[\t\r\n]/.test(s)) s="'"+s;
     return '"'+s.replace(/"/g,'""')+'"';
   }
-  const api={escapeHtml,validCoordinates,normalizeClient,mergeClients,parseCSV,csvCell};
+  function normalizeSearchText(value) {
+    return text(value)
+      .normalize('NFKC')
+      .toLowerCase()
+      .replace(/臺/g, '台')
+      .replace(/[()（）【】「」『』、，,。．・·\-—_\/\\]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  function compactPhoneDigits(value) {
+    const digits = text(value).normalize('NFKC').replace(/\D+/g, '');
+    return digits.length >= 3 ? digits : '';
+  }
+  function buildClientSearchHaystack(c, extraText = '') {
+    const logTexts = (c.visit_logs || []).map(l => `${l.contact || ''} ${l.summary || ''} ${l.outcome || ''} ${l.next_action || ''}`).join(' ');
+    const raw = `${c.name || ''} ${c.address || ''} ${c.road || ''} ${c.industry || ''} ${c.contact || ''} ${c.phone || ''} ${c.notes || ''} ${logTexts} ${extraText}`;
+    const normalized = normalizeSearchText(raw);
+    const phoneDigits = compactPhoneDigits(c.phone);
+    return phoneDigits ? `${normalized} ${phoneDigits}` : normalized;
+  }
+  const api={escapeHtml,validCoordinates,normalizeClient,mergeClients,parseCSV,csvCell,normalizeSearchText,compactPhoneDigits,buildClientSearchHaystack};
   if(typeof module!=='undefined') module.exports=api;
   else root.SalesData=api;
 })(globalThis);

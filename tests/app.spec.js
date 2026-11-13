@@ -162,3 +162,32 @@ test('invalid CSV and malformed backups make no changes; quota failures preserve
   });
   expect(result.saved).toBe(false);expect(result.after).toBe(result.before);
 });
+test('search supports Taiwan variants, compact phone digits, visit log filter recovery and cross-park expansion',async({page})=>{
+  await start(page);
+  await page.evaluate(()=>{
+    clients[0].name='臺灣精準科技股份有限公司';
+    clients[0].phone='03-452-7788';
+    clients[0].visit_logs=[{id:'v_search_1',date:'2026-11-13',contact:'張總務',summary:'評估彩色影印機租賃',outcome:'已提報價單',next_action:'下週二回訪'}];
+    renderList();
+  });
+  // Variant '台' matches '臺'
+  await page.locator('#searchInput').fill('台灣精準');
+  await page.locator('#btnDoSearch').click();
+  await expect(page.locator('#clientList .client-card')).toHaveCount(1);
+  // Compact phone digits without hyphens match
+  await page.locator('#searchInput').fill('034527788');
+  await page.locator('#btnDoSearch').click();
+  await expect(page.locator('#clientList .client-card')).toHaveCount(1);
+  // Active status filter + visit_logs search offers 解除標籤限制
+  await page.locator('[data-status="已拜訪"]').click();
+  await page.locator('#searchInput').fill('張總務');
+  await page.locator('#btnDoSearch').click();
+  await expect(page.locator('#clientList')).toContainText('解除標籤限制');
+  await page.locator('#clientList button', {hasText:'解除標籤限制'}).click();
+  await expect(page.locator('#clientList .client-card')).toHaveCount(1);
+  // Cross-park expansion suggestion when searching a term not in current park
+  await page.locator('#searchInput').fill('龜山工業區');
+  await page.locator('#btnDoSearch').click();
+  await expect(page.locator('#clientList')).toContainText('跨區搜尋建議');
+});
+

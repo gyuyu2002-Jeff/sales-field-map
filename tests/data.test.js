@@ -26,3 +26,17 @@ test('missing coordinates stay unlocated, invalid IDs rejected and text escaped'
   assert.throws(()=>d.normalizeClient({id:'1);alert(1)',name:'bad'},'p','c'));
   assert.equal(d.escapeHtml('<img onerror="x">'),'&lt;img onerror=&quot;x&quot;&gt;');
 });
+test('search normalization unifies Taiwan variants, fullwidth text and phone digits',()=>{
+  assert.equal(d.normalizeSearchText('臺灣（臺中）ＡＢＣ-123'),'台灣 台中 abc 123');
+  assert.equal(d.compactPhoneDigits('03-452-8899#12'),'03452889912');
+  const haystack=d.buildClientSearchHaystack({
+    name:'臺灣精密股份有限公司',
+    phone:'03-452-8899',
+    visit_logs:[{contact:'林經理',summary:'預計下週報價 RICOH IM C3010'}]
+  }, '桃園市 中壢產業園區');
+  assert.ok(haystack.includes('台灣精密'));
+  assert.ok(haystack.includes('034528899'));
+  assert.ok(haystack.includes('林經理'));
+  assert.ok(haystack.includes('imc3010') || haystack.includes('im c3010'));
+});
+

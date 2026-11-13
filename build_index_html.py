@@ -2717,19 +2717,38 @@ html_template = '''<!DOCTYPE html>
       updateMapLabelVisibility();
     }
 
+    function getClientSearchIndex(c) {
+      const parkName = (c.park_id && PARKS[c.park_id]) ? PARKS[c.park_id].name : '';
+      const countyName = (c.county_id && COUNTIES[c.county_id]) ? COUNTIES[c.county_id].name : '';
+      const logCount = (c.visit_logs || []).length;
+      const cacheKey = `${c.status}|${c.notes || ''}|${logCount}|${c.visit_logs?.[0]?.id || ''}`;
+      if (c._searchCacheKey !== cacheKey || !c._searchHaystack) {
+        c._searchHaystack = buildClientSearchHaystack
+          ? buildClientSearchHaystack(c, `${countyName} ${parkName}`)
+          : `${c.name || ''} ${c.address || ''} ${c.road || ''} ${c.industry || ''} ${c.contact || ''} ${c.phone || ''} ${c.notes || ''} ${countyName} ${parkName}`.toLowerCase();
+        c._searchCacheKey = cacheKey;
+      }
+      return c._searchHaystack;
+    }
+
+    function parseSearchKeywords(rawQuery) {
+      const norm = normalizeSearchText ? normalizeSearchText(rawQuery) : String(rawQuery || '').trim().toLowerCase().replace(/臺/g, '台');
+      return norm ? norm.split(/\\s+/).filter(Boolean) : [];
+    }
+
+    function clientMatchesKeywords(c, keywords) {
+      if (!keywords.length) return true;
+      const haystack = getClientSearchIndex(c);
+      return keywords.every(kw => haystack.includes(kw));
+    }
+
     // --- Search & Multi-Dimensional Filtering Logic (嚴格局限於當前所選園區/縣市) ---
     function executeFilter() {
-      const q = (searchQuery || "").trim().toLowerCase();
-      const keywords = q ? q.split(/\\s+/).filter(Boolean) : [];
+      const keywords = parseSearchKeywords(searchQuery);
 
       currentFiltered = clients.filter(c => {
         // 1. Search Query Match
-        if (keywords.length > 0) {
-          const logTexts = (c.visit_logs || []).map(l => `${l.contact || ''} ${l.summary || ''} ${l.outcome || ''} ${l.next_action || ''}`).join(' ');
-          const targetStr = `${c.name || ''} ${c.address || ''} ${c.road || ''} ${c.industry || ''} ${c.contact || ''} ${c.phone || ''} ${c.notes || ''} ${logTexts}`.toLowerCase();
-          const matchAll = keywords.every(kw => targetStr.includes(kw));
-          if (!matchAll) return false;
-        }
+        if (keywords.length > 0 && !clientMatchesKeywords(c, keywords)) return false;
 
         // 2. Road Filter
         if (activeRoad !== "ALL" && c.road !== activeRoad) return false;
@@ -2747,17 +2766,56 @@ html_template = '''<!DOCTYPE html>
       return currentFiltered;
     }
 
-    function renderList() {
+    function focusMapOnSearchResults(explicitTrigger = false) {
+      if (!map || !searchQuery.trim() || currentFiltered.length === 0) return;
+      const located = currentFiltered.filter(validCoordinates);
+      if (located.length === 0) return;
+
+      const mapContainer = map.getContainer();
+      if (!mapContainer || !mapContainer.clientWidth) return;
+
+      const currentBounds = map.getBounds();
+      const anyVisible = located.some(c => currentBounds.contains([c.lat, c.lng]));
+
+      if (explicitTrigger || !anyVisible) {
+        if (located.length === 1) {
+          const target = located[0];
+          map.flyTo([target.lat, target.lng], Math.max(map.getZoom(), 17), { duration: 0.45 });
+          map.once('moveend', () => {
+            updateMarkers(currentFiltered);
+            markers[target.id]?.openPopup();
+          });
+        } else {
+          const bounds = L.latLngBounds(located.map(c => [c.lat, c.lng]));
+          if (bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [44, 44], maxZoom: 17 });
+          }
+        }
+      }
+    }
+
+    function renderList(explicitSearch = false) {
       executeFilter();
 
       // Update Header Count Text & Mobile Toggle Counter
-      document.getElementById('resultCountText').innerText = `顯示 ${currentFiltered.length} / ${clients.length} 家廠商`;
+      const activeTags = [];
+      if (searchQuery.trim()) activeTags.push(`關鍵字「${searchQuery.trim()}」`);
+      if (activeRoad !== 'ALL') activeTags.push(activeRoad);
+      if (activeIndustry !== 'ALL') activeTags.push(activeIndustry);
+      if (activeStatus !== 'ALL') activeTags.push(activeStatus === 'LISTED' ? '上市櫃' : activeStatus);
+      const filterSuffix = activeTags.length > 0 ? ` · 篩選：${activeTags.join(' / ')}` : '';
+      document.getElementById('resultCountText').innerText = `顯示 ${currentFiltered.length} / ${clients.length} 家廠商${filterSuffix}`;
       const mobileCounter = document.getElementById('mobileCount');
       if (mobileCounter) mobileCounter.innerText = currentFiltered.length;
       updateBadgeCounts();
+      setupIndustryChips();
+      setupRoadChips();
 
       // Update Map Pins with Debounce
       updateMarkersDebounced(currentFiltered);
+      if (explicitSearch || searchQuery.trim()) {
+        focusMapOnSearchResults(explicitSearch);
+      }
 
       // Reset card display count and render
       displayedCount = 60;
@@ -2841,7 +2899,7 @@ html_template = '''<!DOCTYPE html>
                  target="_blank" rel="noopener noreferrer"
                  class="nav-btn"
                  onclick="event.stopPropagation();"
-                 title="開啓 Google Maps 導航">
+                 title="開啟 Google Maps 導航">
                 導航
               </a>
             </div>
@@ -2855,6 +2913,12 @@ html_template = '''<!DOCTYPE html>
 
       return card;
     }
+
+    window.searchInScope = function(scopeParkId, countyId) {
+      const q = searchQuery;
+      if (countyId) currentCounty = countyId;
+      switchPark(scopeParkId, q);
+    };
 
     function renderCardsSlice(isReset) {
       const container = document.getElementById('clientList');
@@ -2882,26 +2946,58 @@ html_template = '''<!DOCTYPE html>
         container.appendChild(visitedBanner);
       }
 
-      // Zero Results Handling (無跨縣市干擾，乾淨聚焦在當前園區)
+      // Zero Results Handling (支援解除篩選限制、跨園區名匹配與擴大搜尋範圍)
       if (currentFiltered.length === 0) {
         const q = (searchQuery || "").trim();
         let noticeHtml = '';
 
         if (q) {
-          const keywords = q.toLowerCase().split(/\\s+/).filter(Boolean);
-          const relaxedMatches = clients.filter(c => {
-            const str = `${c.name || ''} ${c.address || ''} ${c.road || ''} ${c.industry || ''} ${c.contact || ''} ${c.phone || ''} ${c.notes || ''}`.toLowerCase();
-            return keywords.every(kw => str.includes(kw));
-          });
+          const keywords = parseSearchKeywords(q);
+          const relaxedMatches = clients.filter(c => clientMatchesKeywords(c, keywords));
 
           if (relaxedMatches.length > 0 && (activeRoad !== 'ALL' || activeIndustry !== 'ALL' || activeStatus !== 'ALL')) {
-            noticeHtml = `
+            noticeHtml += `
               <div style="background:#FFFBEB; border:1px solid #FCD34D; padding:12px; border-radius:8px; margin-bottom:12px; text-align:left; font-size:12.5px; color:#92400E;">
                 💡 <strong>提示：</strong>目前已啟用【${escapeHtml(activeRoad !== 'ALL' ? activeRoad : '')} ${escapeHtml(activeIndustry !== 'ALL' ? activeIndustry : '')} ${escapeHtml(activeStatus !== 'ALL' ? activeStatus : '')}】篩選條件。<br>
-                在當前園區中共找到 <strong>${relaxedMatches.length}</strong> 家廠商符合「${escapeHtml(q)}」！<br>
+                在當前範圍中共找到 <strong>${relaxedMatches.length}</strong> 家廠商符合「${escapeHtml(q)}」！<br>
                 <button onclick="clearAllFiltersAndSearch()" class="btn btn-primary" style="margin-top:8px; font-size:12px; padding:4px 10px;">
                   🔓 解除標籤限制，顯示這 ${relaxedMatches.length} 家
                 </button>
+              </div>
+            `;
+          }
+
+          // Check if the query matches another park name directly
+          const matchingParks = Object.entries(PARKS).filter(([pid, p]) => {
+            if (pid === currentPark) return false;
+            const cName = COUNTIES[p.county_id]?.name || '';
+            const pNorm = normalizeSearchText ? normalizeSearchText(`${cName} ${p.name}`) : `${cName} ${p.name}`.toLowerCase().replace(/臺/g, '台');
+            return keywords.every(kw => pNorm.includes(kw));
+          }).slice(0, 3);
+
+          const countyObj = COUNTIES[currentCounty];
+          const canExpandCounty = countyObj && currentPark !== `all_${currentCounty}` && currentPark !== 'all_taiwan' && (countyObj.parks || []).length > 1;
+          const canExpandTaiwan = currentPark !== 'all_taiwan';
+
+          if (matchingParks.length > 0 || canExpandCounty || canExpandTaiwan) {
+            const parkButtons = matchingParks.map(([pid, p]) =>
+              `<button type="button" class="btn" style="font-size:12px; padding:5px 10px;" onclick="chooseRegion('${p.county_id}','${pid}')">📍 切換至 ${escapeHtml(COUNTIES[p.county_id]?.name || '')} › ${escapeHtml(p.name)} (${p.count} 家)</button>`
+            ).join('');
+            const expandCountyBtn = canExpandCounty
+              ? `<button type="button" class="btn btn-primary" style="font-size:12px; padding:5px 10px;" onclick="searchInScope('all_${currentCounty}', '${currentCounty}')">🔍 擴大搜尋【${escapeHtml(countyObj.name)}全部園區】</button>`
+              : '';
+            const expandTaiwanBtn = canExpandTaiwan
+              ? `<button type="button" class="btn" style="font-size:12px; padding:5px 10px;" onclick="searchInScope('all_taiwan', 'all')">🌐 擴大搜尋【全台 72 大園區】</button>`
+              : '';
+
+            noticeHtml += `
+              <div style="background:#EEF3FC; border:1px solid #CADCF8; padding:12px; border-radius:8px; margin-bottom:12px; text-align:left; font-size:12.5px; color:#1E40AF;">
+                🧭 <strong>跨區搜尋建議：</strong>目前僅在「${escapeHtml(PARKS[currentPark]?.name || (currentCounty === 'all' ? '全台園區' : (COUNTIES[currentCounty]?.name + '全部園區')))}」內查找「${escapeHtml(q)}」。<br>
+                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                  ${parkButtons}
+                  ${expandCountyBtn}
+                  ${expandTaiwanBtn}
+                </div>
               </div>
             `;
           }
@@ -2909,7 +3005,7 @@ html_template = '''<!DOCTYPE html>
 
         const emptyTip = activeStatus === "已拜訪" 
           ? "目前尚無標記為「已拜訪」的廠商。<br>在廠商卡片點擊「✓ 標記為已拜訪」或「📋 拜訪紀錄」即可開始填寫訪談進度！"
-          : "請檢查關鍵字是否有錯字，或點擊上方「重設篩選」";
+          : "請檢查關鍵字是否有錯字、嘗試上方跨區搜尋，或點擊「重設篩選」";
 
         container.innerHTML += `
           <div style="text-align:center; padding:30px 16px; color:#6B7280;">
@@ -3093,21 +3189,39 @@ html_template = '''<!DOCTYPE html>
     };
 
     function updateBadgeCounts() {
-      document.getElementById('countAll').innerText = clients.length;
-      const listedCount = clients.filter(c => c.is_listed === '是').length;
+      const keywords = parseSearchKeywords(searchQuery);
+      const baseForStatus = clients.filter(c => {
+        if (keywords.length > 0 && !clientMatchesKeywords(c, keywords)) return false;
+        if (activeRoad !== "ALL" && c.road !== activeRoad) return false;
+        if (activeIndustry !== "ALL" && c.industry !== activeIndustry) return false;
+        return true;
+      });
+      document.getElementById('countAll').innerText = baseForStatus.length;
+      const listedCount = baseForStatus.filter(c => c.is_listed === '是').length;
       document.getElementById('countListed').innerText = `${listedCount}`;
-      document.getElementById('countPending').innerText = clients.filter(c => c.status === '尚未拜訪' || c.status === '待拜訪').length;
-      document.getElementById('countNegotiating').innerText = clients.filter(c => c.status === '洽談中').length;
-      document.getElementById('countDone').innerText = clients.filter(c => c.status === '已拜訪').length;
+      document.getElementById('countPending').innerText = baseForStatus.filter(c => c.status === '尚未拜訪' || c.status === '待拜訪').length;
+      document.getElementById('countNegotiating').innerText = baseForStatus.filter(c => c.status === '洽談中').length;
+      document.getElementById('countDone').innerText = baseForStatus.filter(c => c.status === '已拜訪').length;
     }
 
     // --- Dynamic Industry Chips ---
     function setupIndustryChips() {
+      const keywords = parseSearchKeywords(searchQuery);
+      const baseForInd = clients.filter(c => {
+        if (keywords.length > 0 && !clientMatchesKeywords(c, keywords)) return false;
+        if (activeRoad !== "ALL" && c.road !== activeRoad) return false;
+        if (activeStatus === "LISTED" && c.is_listed !== "是") return false;
+        if (activeStatus !== "ALL" && activeStatus !== "LISTED" && c.status !== activeStatus) return false;
+        return true;
+      });
       const indMap = {};
-      clients.forEach(c => {
+      baseForInd.forEach(c => {
         const ind = c.industry || "其他製造及服務業";
         indMap[ind] = (indMap[ind] || 0) + 1;
       });
+      if (activeIndustry !== "ALL" && !(activeIndustry in indMap)) {
+        indMap[activeIndustry] = 0;
+      }
 
       const sortedInds = Object.keys(indMap).sort((a, b) => indMap[b] - indMap[a]);
       const container = document.getElementById('industryChips');
@@ -3115,11 +3229,9 @@ html_template = '''<!DOCTYPE html>
 
       const allBtn = document.createElement('button');
       allBtn.className = `chip ${activeIndustry === 'ALL' ? 'active' : ''}`;
-      allBtn.innerText = `全部產業 (${clients.length})`;
+      allBtn.innerText = `全部產業 (${baseForInd.length})`;
       allBtn.onclick = () => {
         activeIndustry = 'ALL';
-        document.querySelectorAll('#industryChips .chip').forEach(b => b.classList.remove('active'));
-        allBtn.classList.add('active');
         document.getElementById('indCurrentLabel').innerText = '全部產業';
         renderList();
       };
@@ -3131,8 +3243,6 @@ html_template = '''<!DOCTYPE html>
         btn.innerText = `${ind} (${indMap[ind]})`;
         btn.onclick = () => {
           activeIndustry = ind;
-          document.querySelectorAll('#industryChips .chip').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
           document.getElementById('indCurrentLabel').innerText = ind;
           renderList();
         };
@@ -3142,12 +3252,23 @@ html_template = '''<!DOCTYPE html>
 
     // --- Dynamic Road Chips ---
     function setupRoadChips() {
+      const keywords = parseSearchKeywords(searchQuery);
+      const baseForRoad = clients.filter(c => {
+        if (keywords.length > 0 && !clientMatchesKeywords(c, keywords)) return false;
+        if (activeIndustry !== "ALL" && c.industry !== activeIndustry) return false;
+        if (activeStatus === "LISTED" && c.is_listed !== "是") return false;
+        if (activeStatus !== "ALL" && activeStatus !== "LISTED" && c.status !== activeStatus) return false;
+        return true;
+      });
       const roadMap = {};
-      clients.forEach(c => {
+      baseForRoad.forEach(c => {
         if (c.road) {
           roadMap[c.road] = (roadMap[c.road] || 0) + 1;
         }
       });
+      if (activeRoad !== "ALL" && !(activeRoad in roadMap)) {
+        roadMap[activeRoad] = 0;
+      }
 
       const sortedRoads = Object.keys(roadMap).sort((a, b) => roadMap[b] - roadMap[a]);
       const roadContainer = document.getElementById('roadChips');
@@ -3155,11 +3276,9 @@ html_template = '''<!DOCTYPE html>
 
       const allBtn = document.createElement('button');
       allBtn.className = `chip ${activeRoad === 'ALL' ? 'active' : ''}`;
-      allBtn.innerText = `全部路段 (${clients.length})`;
+      allBtn.innerText = `全部路段 (${baseForRoad.length})`;
       allBtn.onclick = () => {
         activeRoad = 'ALL';
-        document.querySelectorAll('#roadChips .chip').forEach(c => c.classList.remove('active'));
-        allBtn.classList.add('active');
         document.getElementById('roadCurrentLabel').innerText = '全部路段';
         renderList();
       };
@@ -3171,8 +3290,6 @@ html_template = '''<!DOCTYPE html>
         btn.innerText = `${r} (${roadMap[r]})`;
         btn.onclick = () => {
           activeRoad = r;
-          document.querySelectorAll('#roadChips .chip').forEach(c => c.classList.remove('active'));
-          btn.classList.add('active');
           document.getElementById('roadCurrentLabel').innerText = r;
           renderList();
         };
@@ -3184,8 +3301,8 @@ html_template = '''<!DOCTYPE html>
       activeRoad = 'ALL';
       activeIndustry = 'ALL';
       activeStatus = 'ALL';
-      setupRoadChips();
-      setupIndustryChips();
+      document.getElementById('indCurrentLabel').innerText = '全部產業';
+      document.getElementById('roadCurrentLabel').innerText = '全部路段';
       document.querySelectorAll('#statusChips .chip-status').forEach(b => b.className = "chip chip-status");
       document.querySelector('[data-status="ALL"]').classList.add('active-all');
       renderList();
@@ -3239,33 +3356,49 @@ html_template = '''<!DOCTYPE html>
       const searchInput = document.getElementById('searchInput');
       const clearBtn = document.getElementById('btnClearSearch');
       const searchBtn = document.getElementById('btnDoSearch');
+      let isSearchComposing = false;
 
-      function triggerSearch() {
+      function triggerSearch(explicit = false) {
         searchQuery = searchInput.value.trim();
         clearBtn.style.display = searchQuery ? 'block' : 'none';
-        renderList();
+        renderList(explicit);
       }
 
-      searchInput.addEventListener('input', () => {
+      searchInput.addEventListener('compositionstart', () => {
+        isSearchComposing = true;
+      });
+
+      searchInput.addEventListener('input', (e) => {
+        if (isSearchComposing || e.isComposing) return;
         clearTimeout(searchDebounceTimer);
-        searchDebounceTimer = setTimeout(triggerSearch, 100);
+        searchDebounceTimer = setTimeout(() => triggerSearch(false), 120);
       });
 
       searchInput.addEventListener('compositionend', () => {
+        isSearchComposing = false;
         clearTimeout(searchDebounceTimer);
-        triggerSearch();
+        triggerSearch(false);
       });
 
       searchInput.addEventListener('change', () => {
+        if (isSearchComposing) return;
         clearTimeout(searchDebounceTimer);
-        triggerSearch();
+        triggerSearch(false);
       });
 
       searchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !isSearchComposing && !e.isComposing) {
           e.preventDefault();
           clearTimeout(searchDebounceTimer);
-          triggerSearch();
+          triggerSearch(true);
+        } else if (e.key === 'Escape' && searchInput.value) {
+          e.preventDefault();
+          e.stopPropagation();
+          clearTimeout(searchDebounceTimer);
+          searchInput.value = '';
+          searchQuery = '';
+          clearBtn.style.display = 'none';
+          renderList(false);
         }
       });
 
@@ -3273,7 +3406,7 @@ html_template = '''<!DOCTYPE html>
         searchBtn.addEventListener('click', (e) => {
           e.preventDefault();
           clearTimeout(searchDebounceTimer);
-          triggerSearch();
+          triggerSearch(true);
         });
       }
 
@@ -3283,7 +3416,7 @@ html_template = '''<!DOCTYPE html>
           searchInput.value = '';
           searchQuery = '';
           clearBtn.style.display = 'none';
-          renderList();
+          renderList(false);
           searchInput.focus();
         });
       }

@@ -1,4 +1,4 @@
-const {escapeHtml, validCoordinates, normalizeClient, mergeClients, parseCSV, csvCell} = SalesData;
+const {escapeHtml, validCoordinates, normalizeClient, mergeClients, parseCSV, csvCell, normalizeSearchText, compactPhoneDigits, buildClientSearchHaystack} = SalesData;
 const STORE_KEY = 'sales_field_map_v3';
 const BACKUP_TIME_KEY = 'sales_field_map_last_backup';
 const preferenceKeys = ['sales_custom_stages_v2','sales_map_default_county','sales_map_default_county_prompted'];
