@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 每月 1 號自動更新與郵件發送腳本 (全台科技＆產業園區地圖)
-發送更新摘要報表至: [REDACTED_EMAIL]
+收件信箱透過 REPORT_TO_EMAIL 環境變數設定。
 """
 
 import os
@@ -15,7 +15,7 @@ from email.mime.text import MIMEText
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-RECIPIENT = "[REDACTED_EMAIL]"
+RECIPIENT = os.environ.get("REPORT_TO_EMAIL", "").strip()
 SITE_NAME = "全台科技＆產業園區地圖"
 SITE_URL = "https://gyuyu2002-jeff.github.io/sales-field-map/"
 DATABASE_FILE = "taiwan_parks_database.json"
@@ -38,6 +38,10 @@ def get_db_stats():
     return {"counties": 18, "parks": 72, "factories": 13424}
 
 def send_report():
+    if not RECIPIENT:
+        print("[NOTICE] 未設定 REPORT_TO_EMAIL，略過郵件寄送。")
+        return False
+
     stats = get_db_stats()
     now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M")
     month_str = datetime.now().strftime("%Y年%m月")
@@ -118,9 +122,9 @@ def send_report():
 
     if not smtp_user or not smtp_pass:
         print("[NOTICE] 未偵測到 SMTP_USER 與 SMTP_PASSWORD 環境變數。")
-        print(f"[INFO] 郵件內容已生成完畢，預計收件者：{RECIPIENT}")
+        print("[INFO] 郵件內容已生成完畢，尚未寄送。")
         print("💡 提示：若要在雲端直接由 Gmail 發信，請在 GitHub 儲存庫的 Settings -> Secrets and variables -> Actions 中新增：")
-        print("  • SMTP_USER: 您的 Gmail 帳號 (例如 [REDACTED_EMAIL])")
+        print("  • SMTP_USER: 您的 Gmail 帳號")
         print("  • SMTP_PASSWORD: 您的 Google 應用程式密碼 (16位專用密碼)")
         return False
 
@@ -131,7 +135,7 @@ def send_report():
         msg["To"] = RECIPIENT
         msg.attach(MIMEText(html_content, "html", "utf-8"))
 
-        print(f"[*] 正在連線至 {smtp_server}:{smtp_port} 寄送報表至 {RECIPIENT}...")
+        print(f"[*] 正在連線至 {smtp_server}:{smtp_port} 寄送報表...")
         if smtp_port == 465:
             with smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=20) as server:
                 server.login(smtp_user, smtp_pass)
@@ -142,10 +146,10 @@ def send_report():
                 server.login(smtp_user, smtp_pass)
                 server.sendmail(smtp_user, [RECIPIENT], msg.as_string())
 
-        print(f"[OK] 成功於 {now_str} 寄送每月更新通報至 {RECIPIENT}！")
+        print(f"[OK] 成功於 {now_str} 寄送每月更新通報。")
         return True
     except Exception as e:
-        print(f"[ERROR] 寄送郵件失敗: {e}")
+        print(f"[ERROR] 寄送郵件失敗 ({type(e).__name__})，請檢查 SMTP 設定。")
         return False
 
 if __name__ == '__main__':
